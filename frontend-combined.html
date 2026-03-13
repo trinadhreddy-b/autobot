@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatBot Platform — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600&display=swap" rel="stylesheet">
+  <style>
+/* ============================================================
+   Dashboard Styles
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary:        #2563eb;
+  --primary-dark:   #1d4ed8;
+  --danger:         #ef4444;
+  --success:        #22c55e;
+  --warning:        #f59e0b;
+  --text:           #1e293b;
+  --text-muted:     #64748b;
+  --border:         #e2e8f0;
+  --bg:             #f8fafc;
+  --sidebar-w:      240px;
+  --radius:         10px;
+  --font-heading:   'Manrope', 'Plus Jakarta Sans', sans-serif;
+  --font-body:      'Inter', sans-serif;
+}
+
+body { font-family: var(--font-body);
+       background: var(--bg); color: var(--text); font-size: 14px; }
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.02em;
+}
+
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Utilities ──────────────────────────────────────────────── */
+.hidden { display: none !important; }
+.mt-16  { margin-top: 16px; }
+
+/* ── Buttons ────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 16px; border-radius: 8px; border: none; font-size: 13.5px;
+  font-weight: 500; cursor: pointer; transition: background 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-primary  { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-secondary{ background: #e0e7ff; color: var(--primary); }
+.btn-secondary:hover { background: #c7d2fe; }
+.btn-ghost    { background: transparent; color: var(--text-muted); }
+.btn-ghost:hover { background: #f1f5f9; color: var(--text); }
+.btn-danger   { background: #fee2e2; color: var(--danger); }
+.btn-danger:hover { background: #fecaca; }
+.btn-sm       { padding: 5px 10px; font-size: 12.5px; }
+.full-width   { width: 100%; }
+
+/* ── Alerts ─────────────────────────────────────────────────── */
+.alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
+.alert-error   { background: #fee2e2; color: #b91c1c; }
+.alert-success { background: #dcfce7; color: #15803d; }
+
+/* ── Auth screen ────────────────────────────────────────────── */
+.auth-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  padding: 20px;
+}
+
+.auth-card {
+  background: #fff; border-radius: 16px; padding: 36px 32px;
+  width: 100%; max-width: 420px;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.10);
+  border: 1px solid var(--border);
+}
+
+.auth-logo {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 28px;
+}
+.auth-logo svg  { width: 38px; height: 38px; }
+.auth-logo span { font-size: 20px; font-weight: 700; color: var(--primary); }
+
+.auth-card h2  { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.auth-sub      { color: var(--text-muted); margin-bottom: 20px; font-size: 13.5px; }
+.auth-switch   { text-align: center; margin-top: 16px; color: var(--text-muted); font-size: 13px; }
+
+label { display: flex; flex-direction: column; gap: 5px;
+        font-weight: 500; margin-bottom: 14px; font-size: 13.5px; }
+input[type=text],input[type=email],input[type=password],
+input[type=url],textarea,select,.select {
+  border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 12px;
+  font-size: 13.5px; color: var(--text); outline: none; width: 100%;
+  transition: border-color 0.15s, box-shadow 0.15s; background: #fff;
+  font-family: inherit;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+}
+textarea { resize: vertical; }
+.select { padding: 8px 12px; cursor: pointer; }
+
+/* ── App layout ─────────────────────────────────────────────── */
+.app { display: flex; min-height: 100vh; }
+
+/* ── Sidebar ────────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w); background: #fff; border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; position: fixed; left: 0; top: 0;
+  height: 100vh; z-index: 100; flex-shrink: 0;
+}
+
+.sidebar-logo {
+  display: flex; align-items: center; gap: 10px;
+  padding: 20px 16px 14px; border-bottom: 1px solid var(--border);
+}
+.sidebar-logo svg  { width: 32px; height: 32px; flex-shrink: 0; }
+.sidebar-logo span { font-size: 16px; font-weight: 700; color: var(--primary); }
+
+.sidebar-nav { flex: 1; padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+
+.nav-btn {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  border-radius: 8px; border: none; background: transparent; width: 100%;
+  text-align: left; font-size: 13.5px; font-weight: 500; color: var(--text-muted);
+  cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.nav-btn:hover  { background: #f1f5f9; color: var(--text); }
+.nav-btn.active { background: #eff6ff; color: var(--primary); font-weight: 600; }
+.nav-btn svg    { width: 17px; height: 17px; flex-shrink: 0; }
+
+.sidebar-footer {
+  padding: 12px 14px; border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.user-info { display: flex; align-items: center; gap: 10px; }
+.user-avatar {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--primary);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 15px; flex-shrink: 0;
+}
+.user-name  { font-weight: 600; font-size: 13px; }
+.user-email { color: var(--text-muted); font-size: 12px; white-space: nowrap;
+              overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+
+/* ── Mobile bar ─────────────────────────────────────────────── */
+.mobile-bar {
+  display: none; position: fixed; top: 0; left: 0; right: 0; height: 52px;
+  background: #fff; border-bottom: 1px solid var(--border); z-index: 99;
+  align-items: center; padding: 0 12px; gap: 12px;
+}
+.mobile-title { font-weight: 700; font-size: 16px; }
+
+/* ── Main content ───────────────────────────────────────────── */
+.main-content {
+  margin-left: var(--sidebar-w); padding: 28px; flex: 1;
+  max-width: 1100px; width: 100%;
+}
+
+section { display: block; }
+
+/* ── Section header ─────────────────────────────────────────── */
+.section-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 24px; gap: 12px; flex-wrap: wrap;
+}
+.section-header h1 { font-size: 22px; font-weight: 700; }
+.section-sub { color: var(--text-muted); margin-top: 3px; font-size: 13.5px; }
+
+/* ── Detail tabs ────────────────────────────────────────────── */
+.detail-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab {
+  padding: 6px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: transparent; font-size: 13px; font-weight: 500; cursor: pointer;
+  color: var(--text-muted); transition: all 0.15s;
+}
+.tab:hover  { border-color: var(--primary); color: var(--primary); }
+.tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+/* ── Chatbot cards ──────────────────────────────────────────── */
+.chatbots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+
+.chatbot-card {
+  background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius);
+  padding: 20px; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.chatbot-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.10); border-color: var(--primary); }
+
+.card-top { display: flex; align-items: center; gap: 12px; }
+.card-dot  { width: 40px; height: 40px; border-radius: 10px;
+              display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.card-dot svg { width: 20px; height: 20px; color: #fff; }
+.card-name { font-weight: 700; font-size: 15px; }
+.card-id   { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+
+.card-stats { display: flex; gap: 16px; }
+.stat { display: flex; flex-direction: column; }
+.stat-value { font-size: 18px; font-weight: 700; }
+.stat-label { font-size: 11px; color: var(--text-muted); }
+
+.card-actions { display: flex; gap: 8px; }
+
+/* ── Empty state ────────────────────────────────────────────── */
+.empty-state {
+  text-align: center; padding: 60px 20px; color: var(--text-muted);
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+}
+.empty-state svg { width: 56px; height: 56px; }
+.empty-state h3  { font-size: 18px; color: var(--text); }
+
+/* ── Upload area ────────────────────────────────────────────── */
+.upload-area {
+  border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px;
+  text-align: center; background: #fff; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  margin-bottom: 20px;
+}
+.upload-area:hover { border-color: var(--primary); background: #eff6ff; }
+.upload-area svg   { width: 40px; height: 40px; margin-bottom: 6px; }
+.upload-hint       { font-size: 12px; color: var(--text-muted); }
+.upload-area.drag-over { border-color: var(--primary); background: #eff6ff; }
+
+/* ── URL ingest ─────────────────────────────────────────────── */
+.url-ingest { margin-bottom: 24px; }
+.url-ingest label { font-weight: 600; margin-bottom: 8px; display: block; }
+.input-row  { display: flex; gap: 8px; }
+.input-row input { flex: 1; }
+
+/* ── Docs list ──────────────────────────────────────────────── */
+.docs-list { display: flex; flex-direction: column; gap: 8px; }
+
+.doc-row {
+  background: #fff; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+}
+.doc-icon { font-size: 22px; }
+.doc-info { flex: 1; }
+.doc-name { font-weight: 500; }
+.doc-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.badge {
+  padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600;
+}
+.badge-green   { background: #dcfce7; color: #15803d; }
+.badge-yellow  { background: #fef9c3; color: #a16207; }
+.badge-red     { background: #fee2e2; color: #b91c1c; }
+
+/* ── Code block ─────────────────────────────────────────────── */
+.code-block {
+  background: #1e293b; color: #e2e8f0; border-radius: 8px;
+  padding: 16px; font-size: 13px; line-height: 1.6; white-space: pre-wrap;
+  word-break: break-all; overflow-x: auto; margin: 12px 0;
+}
+
+/* ── Card ───────────────────────────────────────────────────── */
+.card {
+  background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius);
+  padding: 20px;
+}
+.card h3      { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.card-sub     { color: var(--text-muted); font-size: 13px; margin-bottom: 12px; }
+
+/* ── Data table ─────────────────────────────────────────────── */
+.data-table {
+  width: 100%; border-collapse: collapse; background: #fff;
+  border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--border);
+}
+.data-table th {
+  padding: 11px 14px; text-align: left; font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);
+  background: #f8fafc; border-bottom: 1px solid var(--border);
+}
+.data-table td {
+  padding: 11px 14px; border-bottom: 1px solid #f1f5f9; font-size: 13px;
+  max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #f8fafc; }
+
+.pagination { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; }
+
+/* ── Settings ───────────────────────────────────────────────── */
+.settings-form label { font-weight: 500; margin-bottom: 14px; }
+.color-row { display: flex; gap: 8px; align-items: center; }
+.color-row input[type=color] { width: 44px; height: 36px; border-radius: 8px;
+                                border: 1.5px solid var(--border); cursor: pointer; padding: 2px; }
+.settings-actions { display: flex; gap: 10px; margin-top: 8px; }
+
+/* ── Analytics stats ────────────────────────────────────────── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+
+.stat-card {
+  background: #fff; border: 1.5px solid var(--border); border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.stat-card .big  { font-size: 30px; font-weight: 800; color: var(--primary); }
+.stat-card .lbl  { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
+
+/* ── Chart ──────────────────────────────────────────────────── */
+.chart-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.chart-day     { font-size: 12px; color: var(--text-muted); width: 75px; flex-shrink: 0; }
+.chart-bar-bg  { flex: 1; height: 16px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.chart-bar-fill{ height: 100%; background: var(--primary); border-radius: 4px; transition: width 0.4s; }
+.chart-count   { font-size: 12px; font-weight: 600; width: 28px; text-align: right; flex-shrink: 0; }
+
+.provider-row  { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.provider-name { width: 90px; font-size: 13px; font-weight: 500; }
+.provider-bar  { flex: 1; height: 14px; background: #f1f5f9; border-radius: 4px; overflow: hidden; }
+.provider-fill { height: 100%; background: var(--success); border-radius: 4px; }
+.provider-cnt  { font-size: 12px; font-weight: 600; }
+
+/* ── Modal ──────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center; z-index: 9000;
+  backdrop-filter: blur(2px); padding: 16px;
+}
+.modal-box {
+  background: #fff; border-radius: 14px; padding: 0;
+  width: 100%; max-width: 440px;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.22);
+  animation: modal-pop 0.22s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes modal-pop {
+  from { opacity: 0; transform: scale(0.88); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px 12px; border-bottom: 1px solid var(--border);
+}
+.modal-header h3 { font-size: 16px; font-weight: 700; }
+.modal-close { background: none; border: none; font-size: 18px; cursor: pointer;
+               color: var(--text-muted); padding: 4px 8px; border-radius: 6px; }
+.modal-close:hover { background: #f1f5f9; }
+.modal-body   { padding: 18px 20px; }
+.modal-footer { padding: 12px 20px 18px; display: flex; justify-content: flex-end; gap: 8px;
+                border-top: 1px solid var(--border); }
+
+/* ── Toast ──────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: #1e293b; color: #fff; padding: 11px 20px;
+  border-radius: 8px; font-size: 13.5px; font-weight: 500; z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25); max-width: 340px; text-align: center;
+  animation: toast-in 0.22s ease;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); transition: transform 0.25s; }
+  .sidebar.open { transform: translateX(0); }
+  .mobile-bar  { display: flex; }
+  .main-content { margin-left: 0; padding: 70px 16px 24px; }
+  .section-header { flex-direction: column; }
+  .chatbots-grid  { grid-template-columns: 1fr; }
+  .stats-grid     { grid-template-columns: 1fr 1fr; }
+}
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     AUTH SCREENS
+     ══════════════════════════════════════════════════════════ -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="20" fill="#2563eb"/>
+        <path d="M12 26V14l8 6 8-6v12" stroke="#fff" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>ChatBot Platform</span>
+    </div>
+
+    <!-- Login form -->
+    <div id="login-form">
+      <h2>Sign In</h2>
+      <p class="auth-sub">Welcome back! Please sign in to continue.</p>
+      <div id="login-error" class="alert alert-error hidden"></div>
+      <label>Email
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"/>
+      </label>
+      <label>Password
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"/>
+      </label>
+      <button class="btn btn-primary full-width" onclick="doLogin()">Sign In</button>
+      <p class="auth-switch">Don't have an account? <a href="#" onclick="showRegister()">Create one</a></p>
+    </div>
+
+    <!-- Register form -->
+    <div id="register-form" class="hidden">
+      <h2>Create Account</h2>
+      <p class="auth-sub">Get started — it's free.</p>
+      <div id="register-error" class="alert alert-error hidden"></div>
+      <label>Full Name
+        <input type="text" id="reg-name" placeholder="Jane Doe"/>
+      </label>
+      <label>Email
+        <input type="email" id="reg-email" placeholder="you@example.com"/>
+      </label>
+      <label>Company (optional)
+        <input type="text" id="reg-company" placeholder="Acme Inc."/>
+      </label>
+      <label>Password
+        <input type="password" id="reg-password" placeholder="Min 8 characters"/>
+      </label>
+      <button class="btn btn-primary full-width" onclick="doRegister()">Create Account</button>
+      <p class="auth-switch">Already have an account? <a href="#" onclick="showLogin()">Sign in</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MAIN APP
+     ══════════════════════════════════════════════════════════ -->
+<div id="app" class="app hidden">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="20" fill="#2563eb"/>
+        <path d="M12 26V14l8 6 8-6v12" stroke="#fff" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>ChatBot</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-btn active" onclick="showSection('chatbots')" id="nav-chatbots">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        My Chatbots
+      </button>
+      <button class="nav-btn" onclick="showSection('analytics')" id="nav-analytics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        Analytics
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">J</div>
+        <div>
+          <div class="user-name" id="user-name-display">—</div>
+          <div class="user-email" id="user-email-display">—</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
+    </div>
+  </aside>
+
+  <!-- Mobile top bar -->
+  <div class="mobile-bar">
+    <button class="btn btn-ghost" onclick="toggleSidebar()">☰</button>
+    <span class="mobile-title">ChatBot Platform</span>
+  </div>
+
+  <!-- Main content -->
+  <main class="main-content">
+
+    <!-- ── CHATBOTS section ───────────────────────────────── -->
+    <section id="section-chatbots">
+      <div class="section-header">
+        <div>
+          <h1>My Chatbots</h1>
+          <p class="section-sub">Manage your AI assistants and their knowledge bases.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateModal()">
+          + New Chatbot
+        </button>
+      </div>
+
+      <div id="chatbots-grid" class="chatbots-grid"></div>
+      <div id="chatbots-empty" class="empty-state hidden">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <h3>No chatbots yet</h3>
+        <p>Create your first chatbot to get started.</p>
+        <button class="btn btn-primary" onclick="openCreateModal()">Create Chatbot</button>
+      </div>
+    </section>
+
+    <!-- ── CHATBOT DETAIL section ─────────────────────────── -->
+    <section id="section-detail" class="hidden">
+      <div class="section-header">
+        <button class="btn btn-ghost" onclick="backToChatbots()">← Back</button>
+        <div class="detail-tabs">
+          <button class="tab active" onclick="switchTab('docs',this)">Documents</button>
+          <button class="tab" onclick="switchTab('embed',this)">Embed Code</button>
+          <button class="tab" onclick="switchTab('logs',this)">Chat Logs</button>
+          <button class="tab" onclick="switchTab('settings',this)">Settings</button>
+        </div>
+      </div>
+
+      <!-- Documents tab -->
+      <div id="tab-docs">
+        <div class="upload-area" id="upload-area">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p><strong>Drag & drop</strong> or click to upload</p>
+          <p class="upload-hint">PDF, DOCX, TXT, Markdown supported</p>
+          <input type="file" id="file-input" accept=".pdf,.docx,.doc,.txt,.md"
+                 multiple style="display:none" onchange="handleFileUpload(event)"/>
+          <button class="btn btn-secondary" onclick="document.getElementById('file-input').click()">
+            Browse Files
+          </button>
+        </div>
+
+        <div class="url-ingest">
+          <label>Ingest from URL</label>
+          <div class="input-row">
+            <input type="url" id="url-input" placeholder="https://example.com/page" />
+            <button class="btn btn-primary" onclick="handleUrlIngest()">Add</button>
+          </div>
+        </div>
+
+        <div id="docs-list" class="docs-list"></div>
+      </div>
+
+      <!-- Embed tab -->
+      <div id="tab-embed" class="hidden">
+        <div class="card">
+          <h3>Your Embed Code</h3>
+          <p class="card-sub">Paste this snippet before the <code>&lt;/body&gt;</code> tag on any webpage.</p>
+          <pre id="embed-code-block" class="code-block"></pre>
+          <button class="btn btn-primary" onclick="copyEmbedCode()">Copy Code</button>
+        </div>
+        <div class="card mt-16">
+          <h3>Quick Test</h3>
+          <p class="card-sub">Open the widget demo to try your chatbot right now.</p>
+          <a id="demo-link" href="#" target="_blank" class="btn btn-secondary">Open Widget Demo</a>
+        </div>
+      </div>
+
+      <!-- Logs tab -->
+      <div id="tab-logs" class="hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Session</th>
+              <th>User</th>
+              <th>Bot Response</th>
+              <th>Provider</th>
+            </tr>
+          </thead>
+          <tbody id="logs-tbody"></tbody>
+        </table>
+        <div id="logs-pagination" class="pagination"></div>
+      </div>
+
+      <!-- Settings tab -->
+      <div id="tab-settings" class="hidden">
+        <div class="card settings-form">
+          <h3>Chatbot Settings</h3>
+          <label>Name
+            <input type="text" id="setting-name" />
+          </label>
+          <label>Welcome Message
+            <textarea id="setting-welcome" rows="3"></textarea>
+          </label>
+          <label>Widget Color
+            <div class="color-row">
+              <input type="color" id="setting-color" />
+              <input type="text"  id="setting-color-hex" placeholder="#2563eb" />
+            </div>
+          </label>
+          <div class="settings-actions">
+            <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
+            <button class="btn btn-danger"  onclick="confirmDeleteChatbot()">Delete Chatbot</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ANALYTICS section ──────────────────────────────── -->
+    <section id="section-analytics" class="hidden">
+      <div class="section-header">
+        <div>
+          <h1>Analytics</h1>
+          <p class="section-sub">Usage statistics across all your chatbots.</p>
+        </div>
+        <select id="analytics-bot-select" class="select" onchange="loadAnalytics()">
+          <option value="">Select chatbot…</option>
+        </select>
+      </div>
+      <div id="analytics-content">
+        <div class="stats-grid" id="stats-grid"></div>
+        <div class="card mt-16" id="daily-chart-card" style="display:none">
+          <h3>Daily Messages (last 30 days)</h3>
+        </div>
+        <div class="card mt-16" id="providers-card" style="display:none">
+          <h3>Responses by Provider</h3>
+          <div id="providers-list"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal()">
+  <div id="modal-box" class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Create Chatbot</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-error" class="alert alert-error hidden"></div>
+      <label>Chatbot Name
+        <input type="text" id="modal-bot-name" placeholder="e.g. Support Assistant"/>
+      </label>
+      <label>Welcome Message
+        <input type="text" id="modal-welcome" value="Hello! How can I help you today?"/>
+      </label>
+      <label>Widget Color
+        <input type="color" id="modal-color" value="#2563eb"/>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="doCreateChatbot()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast hidden"></div>
+
+<script>
+/**
+ * Dashboard JavaScript
+ */
+
+const API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+  ? "http://localhost:8000"
+  : window.location.origin;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let authToken     = localStorage.getItem("cb_token")   || "";
+let authClientId  = localStorage.getItem("cb_client")  || "";
+let authName      = localStorage.getItem("cb_name")    || "";
+let authEmail     = localStorage.getItem("cb_email")   || "";
+let currentBotId  = "";
+let logsPage      = 0;
+const PAGE_SIZE   = 20;
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  if (authToken) {
+    showApp();
+  } else {
+    showAuth();
+  }
+
+  const uploadArea = document.getElementById("upload-area");
+  if (uploadArea) {
+    uploadArea.addEventListener("dragover",  e => { e.preventDefault(); uploadArea.classList.add("drag-over"); });
+    uploadArea.addEventListener("dragleave", () => uploadArea.classList.remove("drag-over"));
+    uploadArea.addEventListener("drop", e => {
+      e.preventDefault();
+      uploadArea.classList.remove("drag-over");
+      handleFileUpload({ target: { files: e.dataTransfer.files } });
+    });
+    uploadArea.addEventListener("click", () => document.getElementById("file-input").click());
+  }
+
+  document.getElementById("setting-color")?.addEventListener("input", e => {
+    document.getElementById("setting-color-hex").value = e.target.value;
+  });
+  document.getElementById("setting-color-hex")?.addEventListener("input", e => {
+    const v = e.target.value;
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) document.getElementById("setting-color").value = v;
+  });
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function esc(str) {
+  const d = document.createElement("div");
+  d.appendChild(document.createTextNode(String(str)));
+  return d.innerHTML;
+}
+
+function showToast(msg, duration = 2800) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.remove("hidden");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.add("hidden"), duration);
+}
+
+async function apiFetch(path, opts = {}) {
+  const isFormData = opts.body instanceof FormData;
+  const headers = isFormData
+    ? { ...(opts.headers || {}) }
+    : { "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+  const resp = await fetch(API + path, { ...opts, headers });
+  if (resp.status === 401) { doLogout(); return null; }
+  return resp;
+}
+
+function setLoading(btn, loading) {
+  if (!btn) return;
+  btn.disabled = loading;
+  btn._origText = btn._origText || btn.textContent;
+  btn.textContent = loading ? "Loading…" : btn._origText;
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+function showAuth()     { show("auth-screen"); hide("app"); showLogin(); }
+function showApp()      { hide("auth-screen"); show("app"); initApp(); }
+function showLogin()    { show("login-form"); hide("register-form"); hide("login-error"); }
+function showRegister() { hide("login-form"); show("register-form"); hide("register-error"); }
+
+async function doLogin() {
+  const email    = val("login-email");
+  const password = val("login-password");
+  hide("login-error");
+  if (!email || !password) { showErr("login-error", "Please fill in all fields."); return; }
+
+  const resp = await apiFetch("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+  if (!resp) return;
+  const data = await resp.json();
+  if (!resp.ok) { showErr("login-error", data.detail || "Login failed."); return; }
+
+  saveAuth(data);
+  showApp();
+}
+
+async function doRegister() {
+  const name     = val("reg-name");
+  const email    = val("reg-email");
+  const company  = val("reg-company");
+  const password = val("reg-password");
+  hide("register-error");
+  if (!name || !email || !password) { showErr("register-error", "Please fill in all required fields."); return; }
+
+  const resp = await apiFetch("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ name, email, company, password }),
+  });
+  if (!resp) return;
+  const data = await resp.json();
+  if (!resp.ok) { showErr("register-error", data.detail || "Registration failed."); return; }
+
+  saveAuth({ ...data, name, email });
+  showApp();
+}
+
+function saveAuth(data) {
+  authToken    = data.token;
+  authClientId = data.client_id;
+  authName     = data.name     || "";
+  authEmail    = data.email    || "";
+  localStorage.setItem("cb_token",  authToken);
+  localStorage.setItem("cb_client", authClientId);
+  localStorage.setItem("cb_name",   authName);
+  localStorage.setItem("cb_email",  authEmail);
+}
+
+function doLogout() {
+  authToken = authClientId = authName = authEmail = "";
+  localStorage.clear();
+  showAuth();
+}
+
+// ── App init ──────────────────────────────────────────────────────────────────
+
+function initApp() {
+  byId("user-name-display").textContent  = authName  || "—";
+  byId("user-email-display").textContent = authEmail || "—";
+  byId("user-avatar").textContent        = (authName || "U")[0].toUpperCase();
+  showSection("chatbots");
+}
+
+function showSection(name) {
+  ["chatbots","detail","analytics"].forEach(s => hide("section-" + s));
+  show("section-" + name);
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  const navBtn = byId("nav-" + name);
+  if (navBtn) navBtn.classList.add("active");
+
+  if (name === "chatbots")  loadChatbots();
+  if (name === "analytics") loadAnalyticsBotList();
+}
+
+// ── Chatbots ──────────────────────────────────────────────────────────────────
+
+async function loadChatbots() {
+  const resp = await apiFetch("/api/chatbots");
+  if (!resp) return;
+  const data = await resp.json();
+  const bots = data.chatbots || [];
+  const grid = byId("chatbots-grid");
+  const empty= byId("chatbots-empty");
+
+  grid.innerHTML = "";
+  if (bots.length === 0) { hide(grid); show(empty); return; }
+  show(grid); hide(empty);
+
+  bots.forEach(bot => {
+    const card = document.createElement("div");
+    card.className = "chatbot-card";
+    card.innerHTML = `
+      <div class="card-top">
+        <div class="card-dot" style="background:${esc(bot.color||'#2563eb')}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="card-name">${esc(bot.name)}</div>
+          <div class="card-id">ID: ${esc(bot.chatbot_id)}</div>
+        </div>
+      </div>
+      <div class="card-stats">
+        <div class="stat">
+          <span class="stat-value">${bot.doc_count || 0}</span>
+          <span class="stat-label">Documents</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value">${bot.message_count || 0}</span>
+          <span class="stat-label">Messages</span>
+        </div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-primary btn-sm" onclick="openDetail('${esc(bot.chatbot_id)}')">Manage</button>
+        <button class="btn btn-secondary btn-sm" onclick="quickCopyEmbed('${esc(bot.chatbot_id)}',event)">Copy Embed</button>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+async function quickCopyEmbed(chatbotId, event) {
+  event.stopPropagation();
+  const resp = await apiFetch(`/api/embed-code/${chatbotId}`);
+  if (!resp) return;
+  const data = await resp.json();
+  await navigator.clipboard.writeText(data.embed_code).catch(() => {});
+  showToast("Embed code copied!");
+}
+
+// ── Create chatbot modal ───────────────────────────────────────────────────────
+
+function openCreateModal() {
+  hide("modal-error");
+  val("modal-bot-name", "");
+  val("modal-welcome", "Hello! How can I help you today?");
+  show("modal-overlay");
+  byId("modal-bot-name").focus();
+}
+
+function closeModal() { hide("modal-overlay"); }
+
+async function doCreateChatbot() {
+  const name    = val("modal-bot-name").trim();
+  const welcome = val("modal-welcome").trim();
+  const color   = val("modal-color");
+  hide("modal-error");
+
+  if (!name) { showErr("modal-error", "Please enter a chatbot name."); return; }
+
+  const resp = await apiFetch("/api/chatbots", {
+    method: "POST",
+    body: JSON.stringify({ name, welcome_message: welcome, color }),
+  });
+  if (!resp) return;
+  const data = await resp.json();
+  if (!resp.ok) { showErr("modal-error", data.detail || "Failed to create chatbot."); return; }
+
+  closeModal();
+  showToast(`Chatbot "${name}" created!`);
+  loadChatbots();
+}
+
+// ── Chatbot detail ────────────────────────────────────────────────────────────
+
+async function openDetail(chatbotId) {
+  currentBotId = chatbotId;
+  hide("section-chatbots");
+  show("section-detail");
+  switchTab("docs", document.querySelector("#section-detail .tab"));
+  await loadDocuments();
+}
+
+function backToChatbots() {
+  currentBotId = "";
+  hide("section-detail");
+  show("section-chatbots");
+  loadChatbots();
+}
+
+function switchTab(name, btn) {
+  ["docs","embed","logs","settings"].forEach(t => hide("tab-" + t));
+  show("tab-" + name);
+  document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+
+  if (name === "embed")    loadEmbedCode();
+  if (name === "logs")     { logsPage = 0; loadLogs(); }
+  if (name === "settings") loadSettings();
+}
+
+// ── Documents ─────────────────────────────────────────────────────────────────
+
+async function loadDocuments() {
+  const resp = await apiFetch(`/api/chatbots/${currentBotId}/documents`);
+  if (!resp) return;
+  const data = await resp.json();
+  const list = byId("docs-list");
+  list.innerHTML = "";
+
+  (data.documents || []).forEach(doc => {
+    const badgeCls  = doc.status === "ready" ? "badge-green" : doc.status === "failed" ? "badge-red" : "badge-yellow";
+    const icon = fileIcon(doc.filename);
+    const row  = document.createElement("div");
+    row.className = "doc-row";
+    row.innerHTML = `
+      <div class="doc-icon">${icon}</div>
+      <div class="doc-info">
+        <div class="doc-name">${esc(doc.filename)}</div>
+        <div class="doc-meta">${doc.chunk_count || 0} chunks · ${fmtDate(doc.created_at)}</div>
+      </div>
+      <span class="badge ${badgeCls}">${esc(doc.status)}</span>
+      <button class="btn btn-ghost btn-sm" onclick="deleteDoc('${esc(doc.doc_id)}')">🗑</button>`;
+    list.appendChild(row);
+  });
+
+  if (!data.documents?.length) {
+    list.innerHTML = "<p style='color:#94a3b8;padding:12px 0'>No documents yet. Upload files above.</p>";
+  }
+}
+
+async function handleFileUpload(event) {
+  const files = Array.from(event.target.files || []);
+  for (const file of files) {
+    const form = new FormData();
+    form.append("chatbot_id", currentBotId);
+    form.append("file", file);
+    showToast(`Uploading ${file.name}…`);
+    const resp = await apiFetch("/api/upload-document", { method: "POST", body: form });
+    if (resp?.ok) {
+      showToast(`${file.name} is being processed`);
+    } else if (resp) {
+      const err = await resp.json();
+      showToast(`Error: ${err.detail || "Upload failed"}`);
+    }
+  }
+  setTimeout(loadDocuments, 1500);
+}
+
+async function handleUrlIngest() {
+  const url = val("url-input").trim();
+  if (!url) return;
+  const form = new FormData();
+  form.append("chatbot_id", currentBotId);
+  form.append("url", url);
+  showToast("Adding URL…");
+  const resp = await apiFetch("/api/ingest-url", { method: "POST", body: form });
+  if (resp?.ok) {
+    val("url-input", "");
+    showToast("URL added — processing in background");
+    setTimeout(loadDocuments, 2000);
+  } else if (resp) {
+    const err = await resp.json();
+    showToast(`Error: ${err.detail || "Failed"}`);
+  }
+}
+
+async function deleteDoc(docId) {
+  if (!confirm("Delete this document and its vectors?")) return;
+  const resp = await apiFetch(`/api/chatbots/${currentBotId}/documents/${docId}`, { method: "DELETE" });
+  if (resp?.ok) { showToast("Document deleted"); loadDocuments(); }
+}
+
+// ── Embed code ────────────────────────────────────────────────────────────────
+
+async function loadEmbedCode() {
+  const resp = await apiFetch(`/api/embed-code/${currentBotId}`);
+  if (!resp) return;
+  const data = await resp.json();
+  byId("embed-code-block").textContent = data.embed_code;
+  byId("demo-link").href = `${API}/widget-demo?chatbot_id=${currentBotId}`;
+}
+
+async function copyEmbedCode() {
+  const code = byId("embed-code-block").textContent;
+  await navigator.clipboard.writeText(code).catch(() => {});
+  showToast("Embed code copied to clipboard!");
+}
+
+// ── Logs ──────────────────────────────────────────────────────────────────────
+
+async function loadLogs() {
+  const offset = logsPage * PAGE_SIZE;
+  const resp   = await apiFetch(`/api/chatbots/${currentBotId}/logs?limit=${PAGE_SIZE}&offset=${offset}`);
+  if (!resp) return;
+  const data  = await resp.json();
+  const tbody = byId("logs-tbody");
+  tbody.innerHTML = "";
+
+  (data.logs || []).forEach(log => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${fmtDate(log.created_at)}</td>
+      <td><code>${esc(log.session_id?.slice(0,8))}…</code></td>
+      <td title="${esc(log.user_message)}">${esc(truncate(log.user_message, 60))}</td>
+      <td title="${esc(log.bot_response)}">${esc(truncate(log.bot_response, 80))}</td>
+      <td><span class="badge badge-green">${esc(log.provider || '—')}</span></td>`;
+    tbody.appendChild(tr);
+  });
+
+  if (!data.logs?.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:20px">No messages yet.</td></tr>`;
+  }
+
+  const pages = byId("logs-pagination");
+  pages.innerHTML = "";
+  const total = data.total || 0;
+  if (total > PAGE_SIZE) {
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+    for (let p = 0; p < totalPages; p++) {
+      const b = document.createElement("button");
+      b.className = "btn btn-sm " + (p === logsPage ? "btn-primary" : "btn-ghost");
+      b.textContent = p + 1;
+      b.onclick = () => { logsPage = p; loadLogs(); };
+      pages.appendChild(b);
+    }
+  }
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+async function loadSettings() {
+  const resp = await apiFetch(`/api/chatbots/${currentBotId}`);
+  if (!resp) return;
+  const bot = await resp.json();
+  val("setting-name",    bot.name || "");
+  val("setting-welcome", bot.welcome_message || "");
+  val("setting-color",   bot.color || "#2563eb");
+  val("setting-color-hex", bot.color || "#2563eb");
+}
+
+async function saveSettings() {
+  const name    = val("setting-name").trim();
+  const welcome = val("setting-welcome").trim();
+  const color   = val("setting-color-hex").trim() || val("setting-color");
+  const resp    = await apiFetch(`/api/chatbots/${currentBotId}`, {
+    method: "PUT",
+    body:   JSON.stringify({ name, welcome_message: welcome, color }),
+  });
+  if (resp?.ok) { showToast("Settings saved!"); }
+  else          { showToast("Failed to save settings."); }
+}
+
+async function confirmDeleteChatbot() {
+  if (!confirm("Permanently delete this chatbot and ALL its data? This cannot be undone.")) return;
+  const resp = await apiFetch(`/api/chatbots/${currentBotId}`, { method: "DELETE" });
+  if (resp?.ok) { showToast("Chatbot deleted"); backToChatbots(); }
+  else          { showToast("Failed to delete chatbot."); }
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+async function loadAnalyticsBotList() {
+  const resp = await apiFetch("/api/chatbots");
+  if (!resp) return;
+  const data   = await resp.json();
+  const select = byId("analytics-bot-select");
+  select.innerHTML = "<option value=''>Select chatbot…</option>";
+  (data.chatbots || []).forEach(bot => {
+    const opt = document.createElement("option");
+    opt.value = bot.chatbot_id;
+    opt.textContent = bot.name;
+    select.appendChild(opt);
+  });
+}
+
+async function loadAnalytics() {
+  const botId = byId("analytics-bot-select").value;
+  if (!botId) return;
+  const resp  = await apiFetch(`/api/chatbots/${botId}/analytics`);
+  if (!resp)  return;
+  const data  = await resp.json();
+
+  byId("stats-grid").innerHTML = `
+    <div class="stat-card"><div class="big">${data.total_messages}</div><div class="lbl">Total Messages</div></div>
+    <div class="stat-card"><div class="big">${data.unique_sessions}</div><div class="lbl">Unique Sessions</div></div>
+    <div class="stat-card"><div class="big">${data.documents}</div><div class="lbl">Documents</div></div>`;
+
+  const daily = data.daily_messages || [];
+  const chartCard = byId("daily-chart-card");
+  chartCard.style.display = daily.length ? "" : "none";
+  if (daily.length) {
+    const maxCount = Math.max(...daily.map(d => d.count), 1);
+    const existing = chartCard.querySelector(".chart-container");
+    if (existing) existing.remove();
+    const chartDiv = document.createElement("div");
+    chartDiv.className = "chart-container";
+    chartDiv.style.marginTop = "12px";
+    daily.slice(0, 15).forEach(d => {
+      const pct = Math.round((d.count / maxCount) * 100);
+      chartDiv.innerHTML += `
+        <div class="chart-bar-row">
+          <span class="chart-day">${d.day}</span>
+          <div class="chart-bar-bg"><div class="chart-bar-fill" style="width:${pct}%"></div></div>
+          <span class="chart-count">${d.count}</span>
+        </div>`;
+    });
+    chartCard.appendChild(chartDiv);
+  }
+
+  const providers = data.providers || {};
+  const pCard = byId("providers-card");
+  pCard.style.display = Object.keys(providers).length ? "" : "none";
+  if (Object.keys(providers).length) {
+    const maxP = Math.max(...Object.values(providers), 1);
+    byId("providers-list").innerHTML = Object.entries(providers).map(([name, count]) => `
+      <div class="provider-row">
+        <span class="provider-name">${esc(name)}</span>
+        <div class="provider-bar">
+          <div class="provider-fill" style="width:${Math.round(count/maxP*100)}%"></div>
+        </div>
+        <span class="provider-cnt">${count}</span>
+      </div>`).join("");
+  }
+}
+
+// ── DOM helpers ───────────────────────────────────────────────────────────────
+
+function byId(id)    { return document.getElementById(id); }
+function show(el)    { (typeof el==="string"?byId(el):el)?.classList.remove("hidden"); }
+function hide(el)    { (typeof el==="string"?byId(el):el)?.classList.add("hidden"); }
+
+function val(id, set) {
+  const el = byId(id);
+  if (!el) return "";
+  if (set !== undefined) { el.value = set; return set; }
+  return el.value;
+}
+
+function showErr(id, msg) {
+  const el = byId(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
+function fileIcon(name) {
+  const ext = (name||"").split(".").pop().toLowerCase();
+  return { pdf:"📄", docx:"📝", doc:"📝", txt:"📋", md:"📋" }[ext] || "📁";
+}
+
+function fmtDate(iso) {
+  if (!iso) return "—";
+  try { return new Date(iso).toLocaleString(); } catch { return iso; }
+}
+
+function truncate(str, n) {
+  if (!str) return "";
+  return str.length > n ? str.slice(0, n) + "…" : str;
+}
+
+function toggleSidebar() {
+  byId("sidebar").classList.toggle("open");
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { closeModal(); }
+});
+</script>
+</body>
+</html>

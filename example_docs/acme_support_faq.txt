@@ -1,0 +1,125 @@
+ACME Software — Customer Support FAQ
+=====================================
+
+PRODUCT OVERVIEW
+----------------
+ACME Software is a cloud-based project management tool that helps teams
+collaborate, track tasks, and deliver projects on time.
+
+Current version: 4.2.1
+Release date: January 2025
+
+PRICING & PLANS
+---------------
+Free Plan:
+- Up to 3 projects
+- Up to 5 team members
+- 1 GB storage
+- Email support
+
+Pro Plan — $12/user/month:
+- Unlimited projects
+- Unlimited team members
+- 50 GB storage
+- Priority email & chat support
+- Advanced reporting
+
+Enterprise Plan — Custom pricing:
+- Everything in Pro
+- SSO / SAML authentication
+- Dedicated account manager
+- SLA guarantee (99.9% uptime)
+- On-premise deployment option
+
+GETTING STARTED
+---------------
+1. Sign up at https://acme-software.example.com/signup
+2. Verify your email address
+3. Create your first project using the "+ New Project" button
+4. Invite team members via Settings → Team → Invite Members
+5. Download the mobile app (iOS and Android available)
+
+ACCOUNT & BILLING
+-----------------
+Q: How do I upgrade my plan?
+A: Go to Settings → Billing → Upgrade Plan. Changes take effect immediately
+   and you are only charged the prorated amount.
+
+Q: Can I cancel my subscription?
+A: Yes. Go to Settings → Billing → Cancel Subscription. Your account
+   remains active until the end of the current billing period.
+
+Q: What payment methods are accepted?
+A: We accept Visa, Mastercard, American Express, and PayPal.
+   Invoicing is available for Enterprise customers.
+
+Q: How do I get a refund?
+A: Refunds are available within 14 days of charge. Contact
+   billing@acme-software.example.com with your order ID.
+
+FEATURES & USAGE
+----------------
+Q: How do I create a task?
+A: Inside any project, click "+ Add Task", fill in the title,
+   assign a team member, set a due date, and click Save.
+
+Q: Can I set recurring tasks?
+A: Yes. When creating or editing a task, click "Repeat" and choose
+   daily, weekly, monthly, or custom frequency.
+
+Q: How do I use the Gantt chart view?
+A: Open a project and click the "Gantt" tab in the top navigation.
+   The Gantt chart is available on Pro and Enterprise plans.
+
+Q: Is there a time tracking feature?
+A: Yes. Click the timer icon on any task to start tracking time.
+   Reports are available under Analytics → Time Tracking.
+
+Q: How do I integrate with Slack?
+A: Go to Settings → Integrations → Slack, click "Connect", and
+   authorise the ACME Slack app. You'll receive notifications for
+   task assignments and due date reminders.
+
+SECURITY & PRIVACY
+------------------
+Q: Where is my data stored?
+A: Data is stored on AWS servers in the US-East region by default.
+   EU data residency is available on the Enterprise plan.
+
+Q: Is data encrypted?
+A: Yes. All data is encrypted at rest (AES-256) and in transit (TLS 1.3).
+
+Q: Does ACME comply with GDPR?
+A: Yes. We are fully GDPR compliant. You can export or delete all your
+   data at any time from Settings → Privacy → Data Management.
+
+TECHNICAL SUPPORT
+-----------------
+Support hours: Monday–Friday, 9 AM–6 PM EST
+Email:         support@acme-software.example.com
+Chat:          Available in-app (Pro and Enterprise only)
+Status page:   https://status.acme-software.example.com
+
+Response times:
+- Free plan:       Up to 72 hours
+- Pro plan:        Up to 24 hours
+- Enterprise plan: Up to 4 hours
+
+TROUBLESHOOTING
+---------------
+Q: I can't log in to my account.
+A: Try resetting your password at the login page. If the issue persists,
+   clear your browser cache or try a different browser. Contact support
+   if you still can't access your account.
+
+Q: The app is loading slowly.
+A: Check your internet connection. If the issue persists, visit our
+   status page to see if there is an ongoing incident.
+
+Q: I accidentally deleted a project.
+A: Deleted projects are recoverable within 30 days.
+   Go to Settings → Trash → Restore Project.
+
+Q: Can I import data from other tools?
+A: Yes. We support CSV import and direct imports from Trello, Asana,
+   and Monday.com. Go to Settings → Import/Export to get started.

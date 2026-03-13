@@ -1,0 +1,291 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatBot Platform — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/dashboard/dashboard.css" />
+</head>
+<body>
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     AUTH SCREENS
+     â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="20" fill="#2563eb"/>
+        <path d="M12 26V14l8 6 8-6v12" stroke="#fff" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>ChatBot Platform</span>
+    </div>
+
+    <!-- Login form -->
+    <div id="login-form">
+      <h2>Sign In</h2>
+      <p class="auth-sub">Welcome back! Please sign in to continue.</p>
+      <div id="login-error" class="alert alert-error hidden"></div>
+      <label>Email
+        <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"/>
+      </label>
+      <label>Password
+        <input type="password" id="login-password" placeholder="********" autocomplete="current-password"/>
+      </label>
+      <button class="btn btn-primary full-width" onclick="doLogin()">Sign In</button>
+      <p class="auth-switch">Don't have an account? <a href="#" onclick="showRegister()">Create one</a></p>
+    </div>
+
+    <!-- Register form -->
+    <div id="register-form" class="hidden">
+      <h2>Create Account</h2>
+      <p class="auth-sub">Get started - it's free.</p>
+      <div id="register-error" class="alert alert-error hidden"></div>
+      <label>Full Name
+        <input type="text" id="reg-name" placeholder="Jane Doe"/>
+      </label>
+      <label>Email
+        <input type="email" id="reg-email" placeholder="you@example.com"/>
+      </label>
+      <label>Company (optional)
+        <input type="text" id="reg-company" placeholder="Acme Inc."/>
+      </label>
+      <label>Password
+        <input type="password" id="reg-password" placeholder="Min 8 characters"/>
+      </label>
+      <button class="btn btn-primary full-width" onclick="doRegister()">Create Account</button>
+      <p class="auth-switch">Already have an account? <a href="#" onclick="showLogin()">Sign in</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+     MAIN APP
+     â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<div id="app" class="app hidden">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="20" fill="#2563eb"/>
+        <path d="M12 26V14l8 6 8-6v12" stroke="#fff" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>ChatBot</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-btn active" onclick="showSection('chatbots')" id="nav-chatbots">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        My Chatbots
+      </button>
+      <button class="nav-btn" onclick="showSection('analytics')" id="nav-analytics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        Analytics
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar" id="user-avatar">J</div>
+        <div>
+          <div class="user-name" id="user-name-display">-</div>
+          <div class="user-email" id="user-email-display">-</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
+    </div>
+  </aside>
+
+  <!-- Mobile top bar -->
+  <div class="mobile-bar">
+    <button class="btn btn-ghost" onclick="toggleSidebar()">☰</button>
+    <span class="mobile-title">ChatBot Platform</span>
+  </div>
+
+  <!-- Main content -->
+  <main class="main-content">
+
+    <!-- â”€â”€ CHATBOTS section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <section id="section-chatbots">
+      <div class="section-header">
+        <div>
+          <h1>My Chatbots</h1>
+          <p class="section-sub">Manage your AI assistants and their knowledge bases.</p>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateModal()">
+          + New Chatbot
+        </button>
+      </div>
+
+      <div id="chatbots-grid" class="chatbots-grid"></div>
+      <div id="chatbots-empty" class="empty-state hidden">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <h3>No chatbots yet</h3>
+        <p>Create your first chatbot to get started.</p>
+        <button class="btn btn-primary" onclick="openCreateModal()">Create Chatbot</button>
+      </div>
+    </section>
+
+    <!-- â”€â”€ CHATBOT DETAIL section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <section id="section-detail" class="hidden">
+      <div class="section-header">
+        <button class="btn btn-ghost" onclick="backToChatbots()">← Back</button>
+        <div class="detail-tabs">
+          <button class="tab active" onclick="switchTab('docs',this)">Documents</button>
+          <button class="tab" onclick="switchTab('embed',this)">Embed Code</button>
+          <button class="tab" onclick="switchTab('logs',this)">Chat Logs</button>
+          <button class="tab" onclick="switchTab('settings',this)">Settings</button>
+        </div>
+      </div>
+
+      <!-- Documents tab -->
+      <div id="tab-docs">
+        <div class="upload-area" id="upload-area">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <p><strong>Drag & drop</strong> or click to upload</p>
+          <p class="upload-hint">PDF, DOCX, TXT, Markdown supported</p>
+          <input type="file" id="file-input" accept=".pdf,.docx,.doc,.txt,.md"
+                 multiple style="display:none" onchange="handleFileUpload(event)"/>
+          <button class="btn btn-secondary" onclick="document.getElementById('file-input').click()">
+            Browse Files
+          </button>
+        </div>
+
+        <div class="url-ingest">
+          <label>Ingest from URL</label>
+          <div class="input-row">
+            <input type="url" id="url-input" placeholder="https://example.com/page" />
+            <button class="btn btn-primary" onclick="handleUrlIngest()">Add</button>
+          </div>
+        </div>
+
+        <div id="docs-list" class="docs-list"></div>
+      </div>
+
+      <!-- Embed tab -->
+      <div id="tab-embed" class="hidden">
+        <div class="card">
+          <h3>Your Embed Code</h3>
+          <p class="card-sub">Paste this snippet before the <code>&lt;/body&gt;</code> tag on any webpage.</p>
+          <pre id="embed-code-block" class="code-block"></pre>
+          <button class="btn btn-primary" onclick="copyEmbedCode()">Copy Code</button>
+        </div>
+        <div class="card mt-16">
+          <h3>Quick Test</h3>
+          <p class="card-sub">Open the widget demo to try your chatbot right now.</p>
+          <a id="demo-link" href="#" target="_blank" class="btn btn-secondary">Open Widget Demo</a>
+        </div>
+      </div>
+
+      <!-- Logs tab -->
+      <div id="tab-logs" class="hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Session</th>
+              <th>User</th>
+              <th>Bot Response</th>
+              <th>Provider</th>
+            </tr>
+          </thead>
+          <tbody id="logs-tbody"></tbody>
+        </table>
+        <div id="logs-pagination" class="pagination"></div>
+      </div>
+
+      <!-- Settings tab -->
+      <div id="tab-settings" class="hidden">
+        <div class="card settings-form">
+          <h3>Chatbot Settings</h3>
+          <label>Name
+            <input type="text" id="setting-name" />
+          </label>
+          <label>Welcome Message
+            <textarea id="setting-welcome" rows="3"></textarea>
+          </label>
+          <label>Widget Color
+            <div class="color-row">
+              <input type="color" id="setting-color" />
+              <input type="text"  id="setting-color-hex" placeholder="#2563eb" />
+            </div>
+          </label>
+          <div class="settings-actions">
+            <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
+            <button class="btn btn-danger"  onclick="confirmDeleteChatbot()">Delete Chatbot</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- â”€â”€ ANALYTICS section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <section id="section-analytics" class="hidden">
+      <div class="section-header">
+        <div>
+          <h1>Analytics</h1>
+          <p class="section-sub">Usage statistics across all your chatbots.</p>
+        </div>
+        <select id="analytics-bot-select" class="select" onchange="loadAnalytics()">
+          <option value="">Select chatbot...</option>
+        </select>
+      </div>
+      <div id="analytics-content">
+        <div class="stats-grid" id="stats-grid"></div>
+        <div class="card mt-16" id="daily-chart-card" style="display:none">
+          <h3>Daily Messages (last 30 days)</h3>
+        </div>
+        <div class="card mt-16" id="providers-card" style="display:none">
+          <h3>Responses by Provider</h3>
+          <div id="providers-list"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal()">
+  <div id="modal-box" class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>Create Chatbot</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-error" class="alert alert-error hidden"></div>
+      <label>Chatbot Name
+        <input type="text" id="modal-bot-name" placeholder="e.g. Support Assistant"/>
+      </label>
+      <label>Welcome Message
+        <input type="text" id="modal-welcome" value="Hello! How can I help you today?"/>
+      </label>
+      <label>Widget Color
+        <input type="color" id="modal-color" value="#2563eb"/>
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="doCreateChatbot()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast hidden"></div>
+<script src="/static/dashboard/dashboard.js"></script>
+</body>
+</html>

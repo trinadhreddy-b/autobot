@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chatbot Widget Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .demo-card {
+      background: #fff; border-radius: 18px; max-width: 680px; width: 100%;
+      padding: 48px 40px; box-shadow: 0 8px 40px rgba(0,0,0,0.10);
+      border: 1px solid #e2e8f0; text-align: center;
+    }
+    .logo { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 32px; }
+    .logo svg { width: 44px; height: 44px; }
+    .logo span { font-size: 22px; font-weight: 800; color: #2563eb; }
+    h1 { font-size: 28px; font-weight: 800; color: #1e293b; margin-bottom: 10px; }
+    .sub { color: #64748b; font-size: 15px; line-height: 1.6; max-width: 440px; margin: 0 auto 32px; }
+    .features { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 36px; text-align: left; }
+    .feature { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+               padding: 16px; }
+    .feature h3 { font-size: 13.5px; font-weight: 700; margin-bottom: 4px; }
+    .feature p  { font-size: 12.5px; color: #64748b; }
+    .cta { background: #2563eb; color: #fff; padding: 14px 28px; border-radius: 10px;
+           font-size: 15px; font-weight: 600; border: none; cursor: pointer; margin-bottom: 16px; }
+    .cta:hover { background: #1d4ed8; }
+    .hint { font-size: 13px; color: #94a3b8; }
+    .bot-id-info { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px;
+                   padding: 14px 18px; margin: 20px 0; text-align: left; }
+    .bot-id-info code { background: #1e293b; color: #e2e8f0; padding: 2px 8px;
+                        border-radius: 5px; font-size: 13px; }
+    @media (max-width: 520px) {
+      .demo-card { padding: 32px 22px; }
+      .features  { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="demo-card">
+  <div class="logo">
+    <svg viewBox="0 0 40 40" fill="none">
+      <circle cx="20" cy="20" r="20" fill="#2563eb"/>
+      <path d="M12 26V14l8 6 8-6v12" stroke="#fff" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>ChatBot Platform</span>
+  </div>
+
+  <h1>Widget Demo Page</h1>
+  <p class="sub">
+    This page demonstrates the embeddable chatbot widget.
+    Click the blue bubble in the bottom-right corner to open the chat!
+  </p>
+
+  <div class="features">
+    <div class="feature">
+      <h3>🤖 AI-Powered</h3>
+      <p>Answers only from your uploaded documents using RAG.</p>
+    </div>
+    <div class="feature">
+      <h3>⚡ Free Tier APIs</h3>
+      <p>Gemini → Groq → DeepSeek → OpenRouter fallback chain.</p>
+    </div>
+    <div class="feature">
+      <h3>🔒 Isolated Knowledge</h3>
+      <p>Each chatbot has its own vector store — no data mixing.</p>
+    </div>
+    <div class="feature">
+      <h3>📱 Mobile Ready</h3>
+      <p>Fully responsive widget that works on any device.</p>
+    </div>
+  </div>
+
+  <div class="bot-id-info" id="bot-id-display">
+    <strong>Chatbot ID:</strong>
+    <code id="displayed-bot-id">Loading…</code>
+  </div>
+
+  <button class="cta" onclick="document.getElementById('cb-bubble')?.click()">
+    💬 Open Chatbot
+  </button>
+  <br/>
+  <p class="hint">Or click the floating bubble in the bottom-right corner</p>
+
+  <div style="margin-top:28px; padding-top:24px; border-top:1px solid #e2e8f0;">
+    <p style="font-size:13px;color:#94a3b8;margin-bottom:10px;"><strong>Your embed code:</strong></p>
+    <pre id="embed-snippet" style="background:#1e293b;color:#e2e8f0;border-radius:8px;padding:14px;
+         font-size:12.5px;text-align:left;overflow-x:auto;white-space:pre-wrap;">Loading…</pre>
+  </div>
+</div>
+
+<script>
+  // Read chatbot_id from URL or use demo
+  const params    = new URLSearchParams(window.location.search);
+  const chatbotId = params.get("chatbot_id") || "demo";
+  const apiBase   = params.get("api") || window.location.origin;
+
+  document.getElementById("displayed-bot-id").textContent = chatbotId;
+  document.getElementById("embed-snippet").textContent =
+    `<script src="${apiBase}/chatbot.js"\n        data-chatbot-id="${chatbotId}"\n        data-api-endpoint="${apiBase}">\n<\/script>`;
+</script>
+
+<!-- ← The actual widget embed (dynamic from URL param) -->
+<script id="widget-script"></script>
+<script>
+  const s = document.getElementById("widget-script");
+  s.src = `${apiBase}/chatbot.js`;
+  s.setAttribute("data-chatbot-id", chatbotId);
+  s.setAttribute("data-api-endpoint", apiBase);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,30 @@
+# ============================================================
+# Multi-Tenant AI Chatbot Platform — Python Dependencies
+# ============================================================
+
+# Web framework
+fastapi>=0.115.5
+uvicorn[standard]>=0.32.1
+python-multipart>=0.0.12
+
+# Data validation
+pydantic>=2.10.3
+pydantic-settings>=2.6.1
+
+# HTTP client (for LLM provider calls)
+httpx==0.28.1
+
+# Vector database
+chromadb>=0.6.0
+
+# Embeddings (local, no API cost)
+sentence-transformers>=3.3.1
+torch>=2.0.0
+torchvision
+
+# Document loaders
+pypdf==5.1.0
+python-docx==1.1.2
+
+# Utility
+python-dotenv==1.0.1
