@@ -224,6 +224,10 @@
               <input type="text"  id="setting-color-hex" placeholder="#2563eb" />
             </div>
           </label>
+          <label>Allowed Domains
+            <textarea id="setting-domains" rows="3" placeholder="example.com&#10;app.mysite.com&#10;(leave empty to allow all domains)"></textarea>
+            <small style="color:#94a3b8">One domain per line. Leave empty to allow all domains.</small>
+          </label>
           <div class="settings-actions">
             <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
             <button class="btn btn-danger"  onclick="confirmDeleteChatbot()">Delete Chatbot</button>

@@ -415,15 +415,17 @@ async function loadSettings() {
   val("setting-welcome", bot.welcome_message || "");
   val("setting-color",   bot.color || "#2563eb");
   val("setting-color-hex", bot.color || "#2563eb");
+  val("setting-domains", (bot.allowed_domains || []).join("\n"));
 }
 
 async function saveSettings() {
   const name    = val("setting-name").trim();
   const welcome = val("setting-welcome").trim();
   const color   = val("setting-color-hex").trim() || val("setting-color");
+  const allowed_domains = val("setting-domains").split("\n").map(d => d.trim().toLowerCase()).filter(Boolean);
   const resp    = await apiFetch(`/api/chatbots/${currentBotId}`, {
     method: "PUT",
-    body:   JSON.stringify({ name, welcome_message: welcome, color }),
+    body:   JSON.stringify({ name, welcome_message: welcome, color, allowed_domains }),
   });
   if (resp?.ok) { showToast("Settings saved!"); }
   else          { showToast("Failed to save settings."); }

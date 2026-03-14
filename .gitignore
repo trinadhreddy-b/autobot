@@ -18,6 +18,8 @@ build/
 
 # Data & DB (don't commit client data)
 database/*.db
+database/*.db-shm
+database/*.db-wal
 chroma_db/
 data/uploads/
 logs/*.json

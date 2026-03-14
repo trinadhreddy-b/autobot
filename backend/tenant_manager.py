@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS chatbots (
     name            TEXT NOT NULL,
     welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
     color           TEXT DEFAULT '#2563eb',
+    allowed_domains TEXT DEFAULT '',
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL
 );
@@ -102,6 +103,11 @@ class TenantManager:
     def _init_db(self) -> None:
         with self._connect() as conn:
             conn.executescript(SCHEMA_SQL)
+            # Migration: add allowed_domains if it doesn't exist yet
+            try:
+                conn.execute("ALTER TABLE chatbots ADD COLUMN allowed_domains TEXT DEFAULT ''")
+            except Exception:
+                pass  # column already exists
         logger.info("Database initialised at %s", self._db_path)
 
     @staticmethod
@@ -145,17 +151,24 @@ class TenantManager:
                 (token, client_id),
             )
 
+    def update_client_password(self, client_id: str, password_hash: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE clients SET password_hash = ? WHERE client_id = ?",
+                (password_hash, client_id),
+            )
+
     # ═══════════════════════════════════════════════════════════════════════════
     # CHATBOTS
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def create_chatbot(self, chatbot_id, client_id, name, welcome_message, color):
+    def create_chatbot(self, chatbot_id, client_id, name, welcome_message, color, allowed_domains=""):
         now = self._now()
         with self._connect() as conn:
             conn.execute(
-                """INSERT INTO chatbots (chatbot_id, client_id, name, welcome_message, color, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (chatbot_id, client_id, name, welcome_message, color, now, now),
+                """INSERT INTO chatbots (chatbot_id, client_id, name, welcome_message, color, allowed_domains, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (chatbot_id, client_id, name, welcome_message, color, allowed_domains, now, now),
             )
 
     def get_chatbot(self, chatbot_id: str) -> Optional[dict]:
@@ -174,7 +187,7 @@ class TenantManager:
         return [dict(r) for r in rows]
 
     def update_chatbot(self, chatbot_id: str, fields: dict) -> None:
-        allowed = {"name", "welcome_message", "color"}
+        allowed = {"name", "welcome_message", "color", "allowed_domains"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return

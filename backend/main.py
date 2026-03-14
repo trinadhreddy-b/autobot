@@ -11,7 +11,9 @@ import time
 import uuid
 import logging
 import hashlib
+import bcrypt
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import Optional
 
@@ -49,10 +51,14 @@ CONFIG_PATH = Path("../config.json")
 with open(CONFIG_PATH) as f:
     CONFIG = json.load(f)
 
-# ── Rate-limit store (in-memory, per-IP) ─────────────────────────────────────
+# ── Rate-limit store (in-memory) ─────────────────────────────────────────────
 _rate_store: dict[str, list[float]] = {}
-RATE_LIMIT   = 30   # requests
-RATE_WINDOW  = 60   # seconds
+RATE_LIMIT  = 30   # requests per IP
+RATE_WINDOW = 60   # seconds
+
+_chatbot_rate_store: dict[str, list[float]] = {}
+CHATBOT_RATE_LIMIT  = 200   # requests per chatbot
+CHATBOT_RATE_WINDOW = 3600  # 1 hour
 
 def check_rate_limit(ip: str) -> None:
     now = time.time()
@@ -61,6 +67,14 @@ def check_rate_limit(ip: str) -> None:
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     hits.append(now)
     _rate_store[ip] = hits
+
+def check_chatbot_rate_limit(chatbot_id: str) -> None:
+    now = time.time()
+    hits = [t for t in _chatbot_rate_store.get(chatbot_id, []) if now - t < CHATBOT_RATE_WINDOW]
+    if len(hits) >= CHATBOT_RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="This chatbot has reached its hourly request limit.")
+    hits.append(now)
+    _chatbot_rate_store[chatbot_id] = hits
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -136,18 +150,26 @@ class CreateChatbotRequest(BaseModel):
     name: str
     welcome_message: Optional[str] = "Hello! How can I help you today?"
     color: Optional[str] = "#2563eb"
+    allowed_domains: Optional[list[str]] = []
 
 
 class UpdateChatbotRequest(BaseModel):
     name: Optional[str] = None
     welcome_message: Optional[str] = None
     color: Optional[str] = None
+    allowed_domains: Optional[list[str]] = None
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    # Support migration from old SHA-256 hashes (64 hex chars, no $ prefix)
+    if not stored_hash.startswith("$2"):
+        return hashlib.sha256(password.encode()).hexdigest() == stored_hash
+    return bcrypt.checkpw(password.encode(), stored_hash.encode())
 
 
 def get_client_from_token(authorization: Optional[str] = Header(None)):
@@ -158,6 +180,28 @@ def get_client_from_token(authorization: Optional[str] = Header(None)):
     if not client:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return client
+
+
+def check_domain_allowed(bot: dict, request: Request) -> None:
+    """Raise 403 if the request Origin is not in the chatbot's allowed_domains list.
+    If allowed_domains is empty, all origins are permitted."""
+    raw = bot.get("allowed_domains") or ""
+    # Normalize stored domains: strip scheme and port so "localhost:3000" and
+    # "https://example.com" both reduce to just the hostname.
+    def _extract_host(d: str) -> str:
+        d = d.strip().lower()
+        if "://" not in d:
+            d = "http://" + d  # urlparse needs a scheme to parse correctly
+        return urlparse(d).hostname or ""
+    domains = [_extract_host(d) for d in raw.split(",") if d.strip()]
+    if not domains:
+        return  # no restriction configured
+    origin = request.headers.get("origin") or request.headers.get("referer") or ""
+    if not origin:
+        raise HTTPException(status_code=403, detail="Origin header required for this chatbot")
+    hostname = urlparse(origin).hostname or ""
+    if hostname not in domains:
+        raise HTTPException(status_code=403, detail="Domain not allowed for this chatbot")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -189,10 +233,13 @@ async def login(body: ClientLogin, request: Request):
     """Authenticate and receive a session token."""
     check_rate_limit(request.client.host)
     client = tenant_mgr.get_client_by_email(body.email)
-    if not client or client["password_hash"] != hash_password(body.password):
+    if not client or not verify_password(body.password, client["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = str(uuid.uuid4())
     tenant_mgr.update_client_token(client["client_id"], token)
+    # Migrate SHA-256 hash to bcrypt on successful login
+    if not client["password_hash"].startswith("$2"):
+        tenant_mgr.update_client_password(client["client_id"], hash_password(body.password))
     return {
         "client_id": client["client_id"],
         "token": token,
@@ -208,13 +255,14 @@ async def login(body: ClientLogin, request: Request):
 @app.post("/api/chatbots", tags=["Chatbots"])
 async def create_chatbot(body: CreateChatbotRequest, client=Depends(get_client_from_token)):
     """Create a new chatbot for the authenticated client."""
-    chatbot_id = str(uuid.uuid4())[:8]
+    chatbot_id = str(uuid.uuid4()).replace("-", "")[:16]
     tenant_mgr.create_chatbot(
         chatbot_id=chatbot_id,
         client_id=client["client_id"],
         name=body.name,
         welcome_message=body.welcome_message,
         color=body.color,
+        allowed_domains=",".join(body.allowed_domains or []),
     )
     # Initialise an empty collection for this chatbot
     vector_mgr.get_or_create_collection(chatbot_id)
@@ -240,6 +288,7 @@ async def get_chatbot(chatbot_id: str, client=Depends(get_client_from_token)):
         raise HTTPException(status_code=404, detail="Chatbot not found")
     bot["doc_count"]     = tenant_mgr.get_document_count(chatbot_id)
     bot["message_count"] = tenant_mgr.get_message_count(chatbot_id)
+    bot["allowed_domains"] = [d for d in (bot.get("allowed_domains") or "").split(",") if d.strip()]
     return bot
 
 
@@ -249,7 +298,10 @@ async def update_chatbot(chatbot_id: str, body: UpdateChatbotRequest, client=Dep
     bot = tenant_mgr.get_chatbot(chatbot_id)
     if not bot or bot["client_id"] != client["client_id"]:
         raise HTTPException(status_code=404, detail="Chatbot not found")
-    tenant_mgr.update_chatbot(chatbot_id, body.model_dump(exclude_none=True))
+    fields = body.model_dump(exclude_none=True)
+    if "allowed_domains" in fields:
+        fields["allowed_domains"] = ",".join(fields["allowed_domains"])
+    tenant_mgr.update_chatbot(chatbot_id, fields)
     return {"message": "Chatbot updated"}
 
 
@@ -385,6 +437,9 @@ async def chat(body: ChatRequest, request: Request):
     if not bot:
         raise HTTPException(status_code=404, detail="Chatbot not found")
 
+    check_domain_allowed(bot, request)
+    check_chatbot_rate_limit(body.chatbot_id)
+
     session_id = body.session_id or str(uuid.uuid4())
 
     try:
@@ -492,11 +547,12 @@ async def get_analytics(chatbot_id: str, client=Depends(get_client_from_token)):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/chatbot-config/{chatbot_id}", tags=["Widget"])
-async def get_chatbot_config(chatbot_id: str):
+async def get_chatbot_config(chatbot_id: str, request: Request):
     """Public endpoint: returns widget config (color, welcome msg, name)."""
     bot = tenant_mgr.get_chatbot(chatbot_id)
     if not bot:
         raise HTTPException(status_code=404, detail="Chatbot not found")
+    check_domain_allowed(bot, request)
     return {
         "chatbot_id":      chatbot_id,
         "name":            bot["name"],
