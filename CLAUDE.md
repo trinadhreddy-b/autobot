@@ -32,6 +32,12 @@ taskkill //F //IM python.exe          # Windows
 rm -f database/platform.db-wal database/platform.db-shm
 ```
 
+### Git push
+```bash
+git add <files> && git commit -m "message" && git push origin main
+# Remote is HTTPS: https://github.com/trinadhreddy-b/autobot.git
+```
+
 ## Architecture
 
 The backend must always be run from the `backend/` directory — all relative paths (`../database`, `../chroma_db`, `../logs`, `../config.json`) resolve from there.
@@ -73,6 +79,16 @@ Upload endpoints return immediately and run `ingestion.ingest_file` / `ingestion
 
 SQLite at `database/platform.db`. Schema is auto-created by `tenant_manager.py` on startup via `executescript`. Tables: `clients`, `chatbots`, `documents`, `chat_logs`. WAL mode is enabled — if the server crashes, delete `platform.db-wal` and `platform.db-shm` before restarting.
 
+`chatbots` table has an `allowed_domains` column (TEXT, comma-separated hostnames). Added via `ALTER TABLE` migration on startup — safe on existing databases.
+
 ## Frontend
 
 The dashboard (`frontend/dashboard/`) is pure HTML/CSS/JS with no build step. It auto-detects the API base URL from `window.location.origin`. The embeddable widget (`frontend/chatbot.js`) reads `data-chatbot-id` and `data-api-endpoint` from its own `<script>` tag, injects `chatbot.css` dynamically, and calls `/api/chatbot-config/{id}` on load for branding.
+
+## Security
+
+- **Passwords**: bcrypt (via `bcrypt` package). Old SHA-256 hashes auto-migrate to bcrypt on next login.
+- **Domain restriction**: Per-chatbot `allowed_domains` field. Enforced on `/api/chat` and `/api/chatbot-config` via `check_domain_allowed()`. Hostnames normalized (port/scheme stripped). Empty = allow all.
+- **Rate limiting**: 30 req/60s per IP (global). 200 req/hour per chatbot (protects LLM quota).
+- **Chatbot IDs**: 16 hex chars to prevent enumeration.
+- **Note**: Domain restriction only blocks browsers (Origin header). Direct API calls can spoof it.
