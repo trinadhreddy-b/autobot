@@ -58,7 +58,9 @@ HTTP request → main.py (FastAPI)
 Each chatbot gets its own ChromaDB collection named `chatbot_<chatbot_id>`. All vector queries and deletes are scoped by collection — tenants cannot see each other's data. SQLite enforces the same isolation via foreign keys (`chatbots.client_id → clients.client_id`).
 
 ### LLM fallback chain
-`llm_router.py` tries providers in order: **Gemini 2.0 Flash → Groq Llama 3.3 70B → DeepSeek V3 → OpenRouter Qwen 2.5**. A provider is skipped if its `*_API_KEY` env var is unset. `RateLimitError` (HTTP 429) triggers the next provider after a 1.5s backoff; other HTTP errors also fall through.
+`llm_router.py` tries providers in order: **Gemini 2.5 Flash → Groq Llama 3.3 70B → DeepSeek V3 → OpenRouter Qwen 2.5**. A provider is skipped if its `*_API_KEY` env var is unset. `RateLimitError` (HTTP 429) triggers the next provider after a 1.5s backoff; other HTTP errors also fall through.
+
+> **Note**: Use `gemini-2.5-flash` — both `gemini-2.0-flash` and `gemini-1.5-flash` return HTTP 404 on new AI Studio free-tier keys. `gemini-2.5-flash` is confirmed working and free (15 RPM / 1000 RPD limit).
 
 ### Embeddings
 `vector_store.py` loads `BAAI/bge-small-en-v1.5` (or `sentence-transformers/all-MiniLM-L6-v2`) locally via `sentence-transformers`. BGE models use a `"passage: "` prefix on stored chunks and `"query: "` on queries. The model is cached after first load in the process. First startup downloads ~130 MB from Hugging Face.
@@ -75,6 +77,13 @@ Upload endpoints return immediately and run `ingestion.ingest_file` / `ingestion
 
 `.env` (repo root, git-ignored) holds all API keys and `EMBED_MODEL`. Loaded via `python-dotenv` at the top of `main.py`.
 
+Required `.env` vars for Google OAuth:
+```
+GOOGLE_CLIENT_ID=<from Google Cloud Console>
+GOOGLE_CLIENT_SECRET=<from Google Cloud Console>
+OAUTH_REDIRECT_URI=http://localhost:8000/api/auth/oauth/google/callback
+```
+
 ## Database
 
 SQLite at `database/platform.db`. Schema is auto-created by `tenant_manager.py` on startup via `executescript`. Tables: `clients`, `chatbots`, `documents`, `chat_logs`. WAL mode is enabled — if the server crashes, delete `platform.db-wal` and `platform.db-shm` before restarting.
@@ -88,7 +97,12 @@ The dashboard (`frontend/dashboard/`) is pure HTML/CSS/JS with no build step. It
 ## Security
 
 - **Passwords**: bcrypt (via `bcrypt` package). Old SHA-256 hashes auto-migrate to bcrypt on next login.
+- **Google OAuth**: Authorization Code flow. CSRF state token (TTL 600s). Account linking: if Google email matches existing account, OAuth is attached to it. OAuth-only accounts have empty `password_hash`.
 - **Domain restriction**: Per-chatbot `allowed_domains` field. Enforced on `/api/chat` and `/api/chatbot-config` via `check_domain_allowed()`. Hostnames normalized (port/scheme stripped). Empty = allow all.
 - **Rate limiting**: 30 req/60s per IP (global). 200 req/hour per chatbot (protects LLM quota).
 - **Chatbot IDs**: 16 hex chars to prevent enumeration.
 - **Note**: Domain restriction only blocks browsers (Origin header). Direct API calls can spoof it.
+
+## Database
+
+`clients` table has `oauth_provider` and `oauth_id` columns (TEXT DEFAULT ''). Added via `ALTER TABLE` migration on startup alongside `allowed_domains`.
