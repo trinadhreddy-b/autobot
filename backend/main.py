@@ -13,7 +13,8 @@ import logging
 import hashlib
 import bcrypt
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode, quote
+import secrets
 from pathlib import Path
 from typing import Optional
 
@@ -22,7 +23,7 @@ from fastapi import (
     Request, Depends, Header, BackgroundTasks
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, field_validator
 import uvicorn
@@ -59,6 +60,15 @@ RATE_WINDOW = 60   # seconds
 _chatbot_rate_store: dict[str, list[float]] = {}
 CHATBOT_RATE_LIMIT  = 200   # requests per chatbot
 CHATBOT_RATE_WINDOW = 3600  # 1 hour
+
+# ── Google OAuth config ───────────────────────────────────────────────────────
+GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+OAUTH_REDIRECT_URI   = os.getenv("OAUTH_REDIRECT_URI", "http://localhost:8000/api/auth/oauth/google/callback")
+
+# CSRF state store: {state_token: expiry_timestamp}
+_oauth_states: dict[str, float] = {}
+OAUTH_STATE_TTL = 600  # 10 minutes
 
 def check_rate_limit(ip: str) -> None:
     now = time.time()
@@ -166,6 +176,8 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 def verify_password(password: str, stored_hash: str) -> bool:
+    if not stored_hash:
+        return False  # OAuth-only account — no password set
     # Support migration from old SHA-256 hashes (64 hex chars, no $ prefix)
     if not stored_hash.startswith("$2"):
         return hashlib.sha256(password.encode()).hexdigest() == stored_hash
@@ -246,6 +258,107 @@ async def login(body: ClientLogin, request: Request):
         "name": client["name"],
         "email": client["email"],
     }
+
+
+# ── Google OAuth ──────────────────────────────────────────────────────────────
+
+@app.get("/api/auth/oauth/google/authorize", tags=["Auth"])
+async def google_oauth_authorize(request: Request):
+    """Redirect the browser to Google's OAuth consent screen."""
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=501, detail="Google OAuth is not configured on this server")
+    check_rate_limit(request.client.host)
+    state = secrets.token_hex(16)
+    _oauth_states[state] = time.time() + OAUTH_STATE_TTL
+    params = urlencode({
+        "client_id":     GOOGLE_CLIENT_ID,
+        "redirect_uri":  OAUTH_REDIRECT_URI,
+        "response_type": "code",
+        "scope":         "openid email profile",
+        "state":         state,
+        "access_type":   "online",
+    })
+    return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
+
+
+@app.get("/api/auth/oauth/google/callback", tags=["Auth"])
+async def google_oauth_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    """Handle Google's OAuth callback: exchange code, create/login user, redirect to dashboard."""
+    if error:
+        return RedirectResponse("/?oauth_error=" + quote(error))
+
+    # Validate CSRF state
+    expiry = _oauth_states.pop(state, None)
+    if not expiry or time.time() > expiry:
+        return RedirectResponse("/?oauth_error=invalid_state")
+
+    # Exchange authorization code for tokens
+    import httpx as _httpx
+    async with _httpx.AsyncClient() as hc:
+        token_resp = await hc.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code":          code,
+                "client_id":     GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri":  OAUTH_REDIRECT_URI,
+                "grant_type":    "authorization_code",
+            },
+        )
+    if token_resp.status_code != 200:
+        logger.error("Google token exchange failed: %s", token_resp.text)
+        return RedirectResponse("/?oauth_error=token_exchange_failed")
+
+    access_token = token_resp.json().get("access_token")
+
+    # Fetch user info from Google
+    async with _httpx.AsyncClient() as hc:
+        info_resp = await hc.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    if info_resp.status_code != 200:
+        return RedirectResponse("/?oauth_error=userinfo_failed")
+
+    guser     = info_resp.json()
+    google_sub = guser.get("sub")          # stable unique Google user ID
+    email      = guser.get("email", "")
+    name       = guser.get("name") or email.split("@")[0]
+
+    # Find or create account
+    existing = tenant_mgr.get_client_by_oauth("google", google_sub)
+    if not existing:
+        # Check if same email already registered with password — link the accounts
+        existing = tenant_mgr.get_client_by_email(email)
+        if existing:
+            tenant_mgr.update_client_oauth(existing["client_id"], "google", google_sub)
+        else:
+            # Brand-new user — create account (no password)
+            client_id = str(uuid.uuid4())
+            tenant_mgr.create_client(
+                client_id=client_id,
+                name=name,
+                email=email,
+                password_hash="",
+                company="",
+                token="",
+                oauth_provider="google",
+                oauth_id=google_sub,
+            )
+            existing = {"client_id": client_id, "name": name, "email": email}
+
+    # Issue a session token and redirect to dashboard
+    session_token = str(uuid.uuid4())
+    tenant_mgr.update_client_token(existing["client_id"], session_token)
+    logger.info("Google OAuth login: %s (%s)", email, existing["client_id"])
+
+    params = urlencode({
+        "oauth_token": session_token,
+        "client_id":   existing["client_id"],
+        "name":        existing.get("name") or name,
+        "email":       email,
+    })
+    return RedirectResponse(f"/?{params}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

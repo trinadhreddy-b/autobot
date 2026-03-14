@@ -53,6 +53,18 @@ a:hover { text-decoration: underline; }
 .btn-danger:hover { background: #fecaca; }
 .btn-sm       { padding: 5px 10px; font-size: 12.5px; }
 .full-width   { width: 100%; }
+.btn-google   { background: #fff; color: #3c4043; border: 1.5px solid var(--border);
+                font-weight: 500; text-decoration: none; gap: 10px; }
+.btn-google:hover { background: #f8fafc; text-decoration: none; }
+
+/* -- OAuth divider ------------------------------------------------- */
+.oauth-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 14px 0; color: var(--text-muted); font-size: 12.5px;
+}
+.oauth-divider::before, .oauth-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
 
 /* â”€â”€ Alerts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }

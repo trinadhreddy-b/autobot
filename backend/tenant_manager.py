@@ -35,9 +35,11 @@ CREATE TABLE IF NOT EXISTS clients (
     client_id     TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
     email         TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
+    password_hash TEXT NOT NULL DEFAULT '',
     company       TEXT DEFAULT '',
     token         TEXT,
+    oauth_provider TEXT DEFAULT '',
+    oauth_id       TEXT DEFAULT '',
     created_at    TEXT NOT NULL
 );
 
@@ -108,6 +110,12 @@ class TenantManager:
                 conn.execute("ALTER TABLE chatbots ADD COLUMN allowed_domains TEXT DEFAULT ''")
             except Exception:
                 pass  # column already exists
+            # Migration: add OAuth columns to clients
+            for col, defn in [("oauth_provider", "TEXT DEFAULT ''"), ("oauth_id", "TEXT DEFAULT ''")]:
+                try:
+                    conn.execute(f"ALTER TABLE clients ADD COLUMN {col} {defn}")
+                except Exception:
+                    pass  # column already exists
         logger.info("Database initialised at %s", self._db_path)
 
     @staticmethod
@@ -122,12 +130,15 @@ class TenantManager:
     # CLIENTS
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def create_client(self, client_id, name, email, password_hash, company, token):
+    def create_client(self, client_id, name, email, password_hash, company, token,
+                      oauth_provider="", oauth_id=""):
         with self._connect() as conn:
             conn.execute(
-                """INSERT INTO clients (client_id, name, email, password_hash, company, token, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (client_id, name, email, password_hash, company, token, self._now()),
+                """INSERT INTO clients
+                   (client_id, name, email, password_hash, company, token, oauth_provider, oauth_id, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (client_id, name, email, password_hash, company, token,
+                 oauth_provider, oauth_id, self._now()),
             )
 
     def get_client_by_email(self, email: str) -> Optional[dict]:
@@ -156,6 +167,21 @@ class TenantManager:
             conn.execute(
                 "UPDATE clients SET password_hash = ? WHERE client_id = ?",
                 (password_hash, client_id),
+            )
+
+    def get_client_by_oauth(self, provider: str, oauth_id: str) -> Optional[dict]:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM clients WHERE oauth_provider = ? AND oauth_id = ?",
+                (provider, oauth_id),
+            ).fetchone()
+        return self._row_to_dict(row)
+
+    def update_client_oauth(self, client_id: str, oauth_provider: str, oauth_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE clients SET oauth_provider = ?, oauth_id = ? WHERE client_id = ?",
+                (oauth_provider, oauth_id, client_id),
             )
 
     # ═══════════════════════════════════════════════════════════════════════════

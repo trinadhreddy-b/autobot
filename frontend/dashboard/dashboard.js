@@ -17,10 +17,28 @@ const PAGE_SIZE   = 20;
 
 // â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.addEventListener("DOMContentLoaded", () => {
+  // Handle redirect back from Google OAuth
+  const urlParams = new URLSearchParams(window.location.search);
+  const oauthToken = urlParams.get("oauth_token");
+  const oauthError = urlParams.get("oauth_error");
+  if (oauthToken) {
+    saveAuth({
+      token:     oauthToken,
+      client_id: urlParams.get("client_id") || "",
+      name:      urlParams.get("name")      || "",
+      email:     urlParams.get("email")     || "",
+    });
+    window.history.replaceState({}, document.title, "/");
+  }
+  if (oauthError) {
+    window.history.replaceState({}, document.title, "/");
+  }
+
   if (authToken) {
     showApp();
   } else {
     showAuth();
+    if (oauthError) showErr("login-error", "Google sign-in failed: " + oauthError.replace(/_/g, " "));
   }
 
   const uploadArea = document.getElementById("upload-area");
