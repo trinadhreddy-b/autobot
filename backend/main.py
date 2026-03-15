@@ -109,7 +109,7 @@ app.add_middleware(
 )
 
 # ── Static files ──────────────────────────────────────────────────────────────
-FRONTEND_DIR = Path("../frontend")
+FRONTEND_DIR = ROOT_DIR / "frontend"
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
@@ -765,7 +765,7 @@ async def get_chatbot_config(chatbot_id: str, request: Request):
 
 @app.get("/", response_class=HTMLResponse, tags=["Pages"])
 async def serve_dashboard():
-    dashboard = Path("../frontend/dashboard/index.html")
+    dashboard = ROOT_DIR / "frontend" / "dashboard" / "index.html"
     if dashboard.exists():
         return HTMLResponse(dashboard.read_text(encoding="utf-8"))
     return HTMLResponse("<h1>Dashboard not found</h1>")
@@ -773,7 +773,7 @@ async def serve_dashboard():
 
 @app.get("/widget-demo", response_class=HTMLResponse, tags=["Pages"])
 async def serve_widget_demo():
-    demo = Path("../frontend/widget.html")
+    demo = ROOT_DIR / "frontend" / "widget.html"
     if demo.exists():
         return HTMLResponse(demo.read_text(encoding="utf-8"))
     return HTMLResponse("<h1>Widget demo not found</h1>")
@@ -781,7 +781,7 @@ async def serve_widget_demo():
 
 @app.get("/chatbot.js", tags=["Widget"])
 async def serve_chatbot_js():
-    js = Path("../frontend/chatbot.js")
+    js = ROOT_DIR / "frontend" / "chatbot.js"
     if js.exists():
         return FileResponse(str(js), media_type="application/javascript")
     raise HTTPException(status_code=404, detail="chatbot.js not found")
