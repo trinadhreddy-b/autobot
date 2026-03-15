@@ -33,10 +33,12 @@
   let sessionId    = "session_" + Math.random().toString(36).slice(2);
   let isOpen       = false;
   let isTyping     = false;
+  let leadCaptured = false;
   let config       = {
-    name:            "Support Assistant",
-    welcome_message: "Hello! How can I help you today?",
-    color:           "#2563eb",
+    name:              "Support Assistant",
+    welcome_message:   "Hello! How can I help you today?",
+    color:             "#2563eb",
+    lead_form_enabled: false,
   };
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -114,6 +116,26 @@
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </button>
+      </div>
+      <div id="cb-lead-form" style="display:none">
+        <div class="cb-lead-body">
+          <p class="cb-lead-title">Before we start, please share your details</p>
+          <div id="cb-lead-error" class="cb-lead-error cb-hidden"></div>
+          <label class="cb-lead-label">Name (optional)
+            <input type="text" id="cb-lead-name" class="cb-lead-input" placeholder="Your name" maxlength="100"/>
+          </label>
+          <label class="cb-lead-label">Mobile Number <span class="cb-req">*</span>
+            <input type="tel" id="cb-lead-mobile" class="cb-lead-input" placeholder="+1 234 567 8900" maxlength="20"/>
+          </label>
+          <label class="cb-lead-label">Email <span class="cb-req">*</span>
+            <input type="email" id="cb-lead-email" class="cb-lead-input" placeholder="you@example.com" maxlength="200"/>
+          </label>
+          <label class="cb-lead-label">Service Requirement <span class="cb-req">*</span>
+            <textarea id="cb-lead-requirement" class="cb-lead-input cb-lead-textarea"
+                      placeholder="Briefly describe what you need..." rows="3" maxlength="1000"></textarea>
+          </label>
+          <button id="cb-lead-submit" class="cb-lead-submit-btn" style="background:${config.color}">Start Chat</button>
+        </div>
       </div>
       <div id="cb-messages" class="cb-messages" role="log" aria-live="polite"></div>
       <div id="cb-typing" class="cb-typing-indicator cb-hidden">
@@ -197,6 +219,79 @@
     isTyping = show;
   }
 
+  // ── Lead form ─────────────────────────────────────────────────────────────────
+
+  function showLeadError(msg) {
+    const el = document.getElementById("cb-lead-error");
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove("cb-hidden");
+  }
+
+  function hideLeadError() {
+    document.getElementById("cb-lead-error")?.classList.add("cb-hidden");
+  }
+
+  function hideLeadForm() {
+    const form   = document.getElementById("cb-lead-form");
+    const msgs   = document.getElementById("cb-messages");
+    const input  = document.getElementById("cb-input");
+    const sendBtn = document.getElementById("cb-send");
+    if (form)    form.style.display = "none";
+    if (msgs)    msgs.style.display = "";
+    if (input)   { input.disabled = false; }
+    if (sendBtn) sendBtn.disabled = false;
+    addMessage(config.welcome_message, "bot");
+  }
+
+  async function submitLead() {
+    const name        = document.getElementById("cb-lead-name")?.value.trim() || "";
+    const mobile      = document.getElementById("cb-lead-mobile")?.value.trim() || "";
+    const email       = document.getElementById("cb-lead-email")?.value.trim() || "";
+    const requirement = document.getElementById("cb-lead-requirement")?.value.trim() || "";
+
+    const emailRx  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const mobileRx = /^\+?[\d\s\-()+]{7,20}$/;
+
+    if (!mobile || !mobileRx.test(mobile)) {
+      showLeadError("Please enter a valid mobile number."); return;
+    }
+    if (!email || !emailRx.test(email)) {
+      showLeadError("Please enter a valid email address."); return;
+    }
+    if (!requirement) {
+      showLeadError("Please describe your service requirement."); return;
+    }
+
+    const btn = document.getElementById("cb-lead-submit");
+    if (btn) { btn.disabled = true; btn.textContent = "Submitting…"; }
+    hideLeadError();
+
+    try {
+      const res = await fetch(`${API_ENDPOINT}/api/leads`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ chatbot_id: CHATBOT_ID, session_id: sessionId, name, mobile, email, requirement }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showLeadError(err.detail || "Submission failed. Please try again.");
+        if (btn) { btn.disabled = false; btn.textContent = "Start Chat"; }
+        return;
+      }
+
+      leadCaptured = true;
+      sessionStorage.setItem("cb_lead_" + CHATBOT_ID, "1");
+      hideLeadForm();
+
+    } catch (e) {
+      showLeadError("Network error. Please try again.");
+      if (btn) { btn.disabled = false; btn.textContent = "Start Chat"; }
+      console.error("[ChatBot] Lead submit error:", e);
+    }
+  }
+
   // ── Chat logic ───────────────────────────────────────────────────────────────
 
   async function sendMessage() {
@@ -264,7 +359,17 @@
       win.classList.add("cb-visible");
       bubble.classList.add("cb-open");
       bubble.querySelector(".cb-badge")?.remove();
-      document.getElementById("cb-input")?.focus();
+
+      if (config.lead_form_enabled && !leadCaptured) {
+        // Show lead form, hide messages
+        document.getElementById("cb-lead-form").style.display = "";
+        document.getElementById("cb-messages").style.display = "none";
+        document.getElementById("cb-input").disabled = true;
+        document.getElementById("cb-send").disabled = true;
+        setTimeout(() => document.getElementById("cb-lead-name")?.focus(), 50);
+      } else {
+        document.getElementById("cb-input")?.focus();
+      }
     } else {
       win.classList.remove("cb-visible");
       win.classList.add("cb-hidden");
@@ -283,6 +388,7 @@
     bubble?.addEventListener("click", toggleWindow);
     closeBtn?.addEventListener("click", toggleWindow);
     sendBtn?.addEventListener("click", sendMessage);
+    document.getElementById("cb-lead-submit")?.addEventListener("click", submitLead);
 
     input?.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -312,10 +418,18 @@
     buildWidget();
     bindEvents();
 
-    // Show welcome message after short delay
-    setTimeout(() => {
-      addMessage(config.welcome_message, "bot");
-    }, 600);
+    // Determine lead form state for this session
+    if (config.lead_form_enabled) {
+      leadCaptured = sessionStorage.getItem("cb_lead_" + CHATBOT_ID) === "1";
+      if (leadCaptured) {
+        // Already submitted this session — go straight to chat
+        setTimeout(() => addMessage(config.welcome_message, "bot"), 600);
+      }
+      // else: form will appear when user opens the widget (in toggleWindow)
+    } else {
+      // Lead form disabled — normal chat flow
+      setTimeout(() => addMessage(config.welcome_message, "bot"), 600);
+    }
 
     // Show a subtle notification badge after 3s to invite opening
     setTimeout(() => {

@@ -168,6 +168,44 @@ class UpdateChatbotRequest(BaseModel):
     welcome_message: Optional[str] = None
     color: Optional[str] = None
     allowed_domains: Optional[list[str]] = None
+    lead_form_enabled: Optional[int] = None
+
+
+class LeadSubmit(BaseModel):
+    chatbot_id: str
+    session_id: str
+    name: Optional[str] = ""
+    mobile: str
+    email: str
+    requirement: str
+
+    @field_validator("mobile")
+    @classmethod
+    def validate_mobile(cls, v: str) -> str:
+        import re
+        v = v.strip()
+        if not re.match(r"^\+?[\d\s\-()+]{7,20}$", v):
+            raise ValueError("Invalid mobile number format")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_fmt(cls, v: str) -> str:
+        import re
+        v = v.strip()
+        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", v):
+            raise ValueError("Invalid email format")
+        return v
+
+    @field_validator("requirement")
+    @classmethod
+    def validate_requirement(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError("Service requirement is required")
+        if len(v) > 1000:
+            raise ValueError("Service requirement too long (max 1000 chars)")
+        return v
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -656,6 +694,47 @@ async def get_analytics(chatbot_id: str, client=Depends(get_client_from_token)):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# LEADS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/leads", tags=["Leads"])
+async def submit_lead(body: LeadSubmit, request: Request):
+    """Public endpoint called by the widget pre-chat form. No auth required."""
+    check_rate_limit(request.client.host)
+    bot = tenant_mgr.get_chatbot(body.chatbot_id)
+    if not bot:
+        raise HTTPException(status_code=404, detail="Chatbot not found")
+    check_domain_allowed(bot, request)
+    lead_id = tenant_mgr.create_lead(
+        chatbot_id=body.chatbot_id,
+        session_id=body.session_id,
+        name=body.name or "",
+        mobile=body.mobile,
+        email=body.email,
+        requirement=body.requirement,
+    )
+    logger.info("Lead captured: chatbot=%s session=%s email=%s",
+                body.chatbot_id, body.session_id, body.email)
+    return {"lead_id": lead_id, "message": "Lead submitted successfully"}
+
+
+@app.get("/api/chatbots/{chatbot_id}/leads", tags=["Leads"])
+async def get_leads(
+    chatbot_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    client=Depends(get_client_from_token),
+):
+    """Retrieve paginated leads for a chatbot (dashboard only)."""
+    bot = tenant_mgr.get_chatbot(chatbot_id)
+    if not bot or bot["client_id"] != client["client_id"]:
+        raise HTTPException(status_code=404, detail="Chatbot not found")
+    leads = tenant_mgr.get_leads(chatbot_id, limit=limit, offset=offset)
+    total = tenant_mgr.get_lead_count(chatbot_id)
+    return {"leads": leads, "total": total, "limit": limit, "offset": offset}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # PUBLIC CHATBOT INFO (used by widget)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -667,10 +746,11 @@ async def get_chatbot_config(chatbot_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Chatbot not found")
     check_domain_allowed(bot, request)
     return {
-        "chatbot_id":      chatbot_id,
-        "name":            bot["name"],
-        "welcome_message": bot["welcome_message"],
-        "color":           bot.get("color", "#2563eb"),
+        "chatbot_id":        chatbot_id,
+        "name":              bot["name"],
+        "welcome_message":   bot["welcome_message"],
+        "color":             bot.get("color", "#2563eb"),
+        "lead_form_enabled": bool(bot.get("lead_form_enabled", 0)),
     }
 
 

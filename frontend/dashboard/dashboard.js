@@ -13,6 +13,7 @@ let authName      = localStorage.getItem("cb_name")    || "";
 let authEmail     = localStorage.getItem("cb_email")   || "";
 let currentBotId  = "";
 let logsPage      = 0;
+let leadsPage     = 0;
 const PAGE_SIZE   = 20;
 
 // â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -285,13 +286,14 @@ function backToChatbots() {
 }
 
 function switchTab(name, btn) {
-  ["docs","embed","logs","settings"].forEach(t => hide("tab-" + t));
+  ["docs","embed","logs","leads","settings"].forEach(t => hide("tab-" + t));
   show("tab-" + name);
   document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
   if (btn) btn.classList.add("active");
 
   if (name === "embed")    loadEmbedCode();
   if (name === "logs")     { logsPage = 0; loadLogs(); }
+  if (name === "leads")    { leadsPage = 0; loadLeads(); }
   if (name === "settings") loadSettings();
 }
 
@@ -434,6 +436,8 @@ async function loadSettings() {
   val("setting-color",   bot.color || "#2563eb");
   val("setting-color-hex", bot.color || "#2563eb");
   val("setting-domains", (bot.allowed_domains || []).join("\n"));
+  const leadToggle = document.getElementById("setting-lead-form");
+  if (leadToggle) leadToggle.checked = !!bot.lead_form_enabled;
 }
 
 async function saveSettings() {
@@ -441,12 +445,84 @@ async function saveSettings() {
   const welcome = val("setting-welcome").trim();
   const color   = val("setting-color-hex").trim() || val("setting-color");
   const allowed_domains = val("setting-domains").split("\n").map(d => d.trim().toLowerCase()).filter(Boolean);
+  const lead_form_enabled = document.getElementById("setting-lead-form")?.checked ? 1 : 0;
   const resp    = await apiFetch(`/api/chatbots/${currentBotId}`, {
     method: "PUT",
-    body:   JSON.stringify({ name, welcome_message: welcome, color, allowed_domains }),
+    body:   JSON.stringify({ name, welcome_message: welcome, color, allowed_domains, lead_form_enabled }),
   });
   if (resp?.ok) { showToast("Settings saved!"); }
   else          { showToast("Failed to save settings."); }
+}
+
+// ── Leads ─────────────────────────────────────────────────────────────────────
+
+async function loadLeads() {
+  const offset = leadsPage * PAGE_SIZE;
+  const resp   = await apiFetch(`/api/chatbots/${currentBotId}/leads?limit=${PAGE_SIZE}&offset=${offset}`);
+  if (!resp) return;
+  if (!resp.ok) { showToast(`Failed to load leads (${resp.status})`); return; }
+  const data  = await resp.json();
+  const tbody = byId("leads-tbody");
+  tbody.innerHTML = "";
+
+  const heading = byId("leads-count-heading");
+  if (heading) heading.textContent = `${data.total || 0} Lead${(data.total || 0) !== 1 ? "s" : ""} Captured`;
+
+  (data.leads || []).forEach(lead => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${fmtDate(lead.created_at)}</td>
+      <td><code>${esc((lead.session_id || "").slice(0, 8))}...</code></td>
+      <td>${esc(lead.name || "—")}</td>
+      <td>${esc(lead.mobile)}</td>
+      <td>${esc(lead.email)}</td>
+      <td title="${esc(lead.requirement)}">${esc(truncate(lead.requirement, 60))}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  if (!(data.leads || []).length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:20px">No leads captured yet.</td></tr>`;
+  }
+
+  const pages = byId("leads-pagination");
+  pages.innerHTML = "";
+  const total = data.total || 0;
+  if (total > PAGE_SIZE) {
+    const totalPages = Math.ceil(total / PAGE_SIZE);
+    for (let p = 0; p < totalPages; p++) {
+      const b = document.createElement("button");
+      b.className = "btn btn-sm " + (p === leadsPage ? "btn-primary" : "btn-ghost");
+      b.textContent = p + 1;
+      b.onclick = () => { leadsPage = p; loadLeads(); };
+      pages.appendChild(b);
+    }
+  }
+}
+
+async function exportLeadsCSV() {
+  const resp = await apiFetch(`/api/chatbots/${currentBotId}/leads?limit=10000&offset=0`);
+  if (!resp) return;
+  const data  = await resp.json();
+  const leads = data.leads || [];
+  if (!leads.length) { showToast("No leads to export."); return; }
+
+  const header = ["Date", "Session ID", "Name", "Mobile", "Email", "Requirement"];
+  const rows   = leads.map(l => [
+    fmtDate(l.created_at), l.session_id, l.name || "", l.mobile, l.email,
+    l.requirement.replace(/\n/g, " "),
+  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+
+  const csv  = [header.join(","), ...rows].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `leads_${currentBotId}_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Leads exported!");
 }
 
 async function confirmDeleteChatbot() {
@@ -482,7 +558,8 @@ async function loadAnalytics() {
   byId("stats-grid").innerHTML = `
     <div class="stat-card"><div class="big">${data.total_messages}</div><div class="lbl">Total Messages</div></div>
     <div class="stat-card"><div class="big">${data.unique_sessions}</div><div class="lbl">Unique Sessions</div></div>
-    <div class="stat-card"><div class="big">${data.documents}</div><div class="lbl">Documents</div></div>`;
+    <div class="stat-card"><div class="big">${data.documents}</div><div class="lbl">Documents</div></div>
+    <div class="stat-card"><div class="big">${data.total_leads ?? 0}</div><div class="lbl">Leads Captured</div></div>`;
 
   const daily = data.daily_messages || [];
   const chartCard = byId("daily-chart-card");

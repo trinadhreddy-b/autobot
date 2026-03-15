@@ -165,6 +165,7 @@
           <button class="tab active" onclick="switchTab('docs',this)">Documents</button>
           <button class="tab" onclick="switchTab('embed',this)">Embed Code</button>
           <button class="tab" onclick="switchTab('logs',this)">Chat Logs</button>
+          <button class="tab" onclick="switchTab('leads',this)">Leads</button>
           <button class="tab" onclick="switchTab('settings',this)">Settings</button>
         </div>
       </div>
@@ -228,6 +229,28 @@
         <div id="logs-pagination" class="pagination"></div>
       </div>
 
+      <!-- Leads tab -->
+      <div id="tab-leads" class="hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 id="leads-count-heading" style="color:#1e293b;font-size:15px;font-weight:600;margin:0"></h3>
+          <button class="btn btn-secondary btn-sm" onclick="exportLeadsCSV()">Export CSV</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Session</th>
+              <th>Name</th>
+              <th>Mobile</th>
+              <th>Email</th>
+              <th>Requirement</th>
+            </tr>
+          </thead>
+          <tbody id="leads-tbody"></tbody>
+        </table>
+        <div id="leads-pagination" class="pagination"></div>
+      </div>
+
       <!-- Settings tab -->
       <div id="tab-settings" class="hidden">
         <div class="card settings-form">
@@ -247,6 +270,13 @@
           <label>Allowed Domains
             <textarea id="setting-domains" rows="3" placeholder="example.com&#10;app.mysite.com&#10;(leave empty to allow all domains)"></textarea>
             <small style="color:#94a3b8">One domain per line. Leave empty to allow all domains.</small>
+          </label>
+          <label style="flex-direction:row;align-items:center;gap:10px;cursor:pointer">
+            <input type="checkbox" id="setting-lead-form" style="width:16px;height:16px;cursor:pointer"/>
+            <span>
+              <strong>Lead Capture Form</strong>
+              <small style="color:#64748b;display:block">Show a contact form before users start chatting</small>
+            </span>
           </label>
           <div class="settings-actions">
             <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>

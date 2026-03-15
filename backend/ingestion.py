@@ -63,41 +63,135 @@ def _load_docx(path: str) -> str:
 
 
 def _load_url(url: str) -> str:
-    """Fetch a web page and extract clean text."""
+    """Fetch a web page and extract clean text.
+
+    Strategy (in order):
+    1. Standard HTML text extraction (works for server-rendered sites)
+    2. Meta tags + title (SEO fields always present, even on JS-rendered sites)
+    3. JSON-LD structured data (schema.org blocks embedded in <script> tags)
+    4. Next.js __NEXT_DATA__ / Nuxt __NUXT_DATA__ JSON blobs
+    5. trafilatura if installed (best-effort smart extractor)
+    """
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
     try:
         import httpx
+        import json
         from html.parser import HTMLParser
 
-        class _TextExtractor(HTMLParser):
+        class _FullExtractor(HTMLParser):
+            """Extract visible text, meta descriptions, and JSON-LD blobs."""
             def __init__(self):
                 super().__init__()
-                self._skip_tags = {"script", "style", "noscript", "head"}
-                self._current_skip = False
-                self.text_parts: list[str] = []
+                self._skip_tags  = {"style", "noscript"}
+                self._json_tags  = set()   # script tags we want to capture
+                self._in_skip    = False
+                self._in_json    = False
+                self._in_title   = False
+                self.text_parts:  list[str] = []
+                self.meta_parts:  list[str] = []
+                self.json_blobs:  list[str] = []
+                self._buf = ""
 
             def handle_starttag(self, tag, attrs):
-                if tag.lower() in self._skip_tags:
-                    self._current_skip = True
+                t = tag.lower()
+                adict = dict(attrs)
+                if t in self._skip_tags:
+                    self._in_skip = True
+                elif t == "title":
+                    self._in_title = True
+                elif t == "meta":
+                    # collect description / og:description / keywords
+                    name = (adict.get("name") or adict.get("property") or "").lower()
+                    content = adict.get("content", "").strip()
+                    if content and any(k in name for k in ("description", "keyword", "title")):
+                        self.meta_parts.append(content)
+                elif t == "script":
+                    stype = adict.get("type", "").lower()
+                    sid   = adict.get("id", "").lower()
+                    if stype == "application/ld+json" or sid in ("__next_data__", "__nuxt_data__"):
+                        self._in_json = True
+                        self._buf = ""
+                    else:
+                        self._in_skip = True
 
             def handle_endtag(self, tag):
-                if tag.lower() in self._skip_tags:
-                    self._current_skip = False
+                t = tag.lower()
+                if t in self._skip_tags or t == "script":
+                    if self._in_json and t == "script":
+                        self.json_blobs.append(self._buf)
+                        self._buf = ""
+                    self._in_skip = False
+                    self._in_json = False
+                elif t == "title":
+                    self._in_title = False
 
             def handle_data(self, data):
-                if not self._current_skip:
+                if self._in_json:
+                    self._buf += data
+                elif self._in_title:
+                    stripped = data.strip()
+                    if stripped:
+                        self.meta_parts.append("Title: " + stripped)
+                elif not self._in_skip:
                     stripped = data.strip()
                     if stripped:
                         self.text_parts.append(stripped)
 
-        response = httpx.get(url, timeout=30, follow_redirects=True,
-                             headers={"User-Agent": "ChatBot-Crawler/1.0"})
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        response = httpx.get(url, timeout=30, follow_redirects=True, headers=headers)
         response.raise_for_status()
-        extractor = _TextExtractor()
+
+        extractor = _FullExtractor()
         extractor.feed(response.text)
-        raw = "\n".join(extractor.text_parts)
-        # Collapse multiple blank lines
-        raw = re.sub(r"\n{3,}", "\n\n", raw)
-        return raw.strip()
+
+        parts: list[str] = []
+
+        # 1. Standard visible text
+        parts.extend(extractor.text_parts)
+
+        # 2. Meta tags (always harvest even if visible text exists)
+        parts.extend(extractor.meta_parts)
+
+        # 3. JSON-LD / __NEXT_DATA__ blobs — extract string values recursively
+        def _strings_from_json(obj, depth=0):
+            if depth > 6:
+                return
+            if isinstance(obj, str) and len(obj) > 20:
+                yield obj
+            elif isinstance(obj, dict):
+                for v in obj.values():
+                    yield from _strings_from_json(v, depth + 1)
+            elif isinstance(obj, list):
+                for item in obj:
+                    yield from _strings_from_json(item, depth + 1)
+
+        for blob in extractor.json_blobs:
+            try:
+                data = json.loads(blob)
+                parts.extend(_strings_from_json(data))
+            except Exception:
+                pass
+
+        raw = "\n".join(parts)
+        raw = re.sub(r"\n{3,}", "\n\n", raw).strip()
+
+        # 4. trafilatura fallback if still empty and library is available
+        if not raw:
+            try:
+                import trafilatura
+                raw = trafilatura.extract(response.text) or ""
+            except ImportError:
+                pass
+
+        return raw
     except Exception as e:
         raise RuntimeError(f"Failed to load URL {url}: {e}")
 

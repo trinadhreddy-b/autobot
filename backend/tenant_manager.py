@@ -6,6 +6,7 @@ Tables:
   chatbots    – each client's chatbot configurations
   documents   – uploaded/ingested documents
   chat_logs   – per-session conversation history
+  leads       – lead capture form submissions
 
 All operations are synchronous (SQLite is fast enough for the
 expected load; swap to async SQLAlchemy + Postgres for high scale).
@@ -44,14 +45,15 @@ CREATE TABLE IF NOT EXISTS clients (
 );
 
 CREATE TABLE IF NOT EXISTS chatbots (
-    chatbot_id      TEXT PRIMARY KEY,
-    client_id       TEXT NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
-    name            TEXT NOT NULL,
-    welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
-    color           TEXT DEFAULT '#2563eb',
-    allowed_domains TEXT DEFAULT '',
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
+    chatbot_id        TEXT PRIMARY KEY,
+    client_id         TEXT NOT NULL REFERENCES clients(client_id) ON DELETE CASCADE,
+    name              TEXT NOT NULL,
+    welcome_message   TEXT DEFAULT 'Hello! How can I help you today?',
+    color             TEXT DEFAULT '#2563eb',
+    allowed_domains   TEXT DEFAULT '',
+    lead_form_enabled INTEGER DEFAULT 0,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS documents (
@@ -76,12 +78,25 @@ CREATE TABLE IF NOT EXISTS chat_logs (
     created_at   TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS leads (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    chatbot_id   TEXT NOT NULL REFERENCES chatbots(chatbot_id) ON DELETE CASCADE,
+    session_id   TEXT NOT NULL,
+    name         TEXT DEFAULT '',
+    mobile       TEXT NOT NULL,
+    email        TEXT NOT NULL,
+    requirement  TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_chatbots_client ON chatbots(client_id);
 CREATE INDEX IF NOT EXISTS idx_documents_chatbot ON documents(chatbot_id);
 CREATE INDEX IF NOT EXISTS idx_logs_chatbot ON chat_logs(chatbot_id);
 CREATE INDEX IF NOT EXISTS idx_logs_session ON chat_logs(session_id);
 CREATE INDEX IF NOT EXISTS idx_clients_email ON clients(email);
 CREATE INDEX IF NOT EXISTS idx_clients_token ON clients(token);
+CREATE INDEX IF NOT EXISTS idx_leads_chatbot ON leads(chatbot_id);
+CREATE INDEX IF NOT EXISTS idx_leads_session ON leads(session_id);
 """
 
 
@@ -116,6 +131,11 @@ class TenantManager:
                     conn.execute(f"ALTER TABLE clients ADD COLUMN {col} {defn}")
                 except Exception:
                     pass  # column already exists
+            # Migration: add lead_form_enabled to chatbots
+            try:
+                conn.execute("ALTER TABLE chatbots ADD COLUMN lead_form_enabled INTEGER DEFAULT 0")
+            except Exception:
+                pass  # column already exists
         logger.info("Database initialised at %s", self._db_path)
 
     @staticmethod
@@ -213,7 +233,7 @@ class TenantManager:
         return [dict(r) for r in rows]
 
     def update_chatbot(self, chatbot_id: str, fields: dict) -> None:
-        allowed = {"name", "welcome_message", "color", "allowed_domains"}
+        allowed = {"name", "welcome_message", "color", "allowed_domains", "lead_form_enabled"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return
@@ -301,6 +321,37 @@ class TenantManager:
         return row["c"] if row else 0
 
     # ═══════════════════════════════════════════════════════════════════════════
+    # LEADS
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def create_lead(self, chatbot_id: str, session_id: str, name: str,
+                    mobile: str, email: str, requirement: str) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """INSERT INTO leads (chatbot_id, session_id, name, mobile, email, requirement, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (chatbot_id, session_id, name, mobile, email, requirement, self._now()),
+            )
+            return cursor.lastrowid
+
+    def get_leads(self, chatbot_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT * FROM leads WHERE chatbot_id = ?
+                   ORDER BY created_at DESC LIMIT ? OFFSET ?""",
+                (chatbot_id, limit, offset),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_lead_count(self, chatbot_id: str) -> int:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) as c FROM leads WHERE chatbot_id = ?",
+                (chatbot_id,),
+            ).fetchone()
+        return row["c"] if row else 0
+
+    # ═══════════════════════════════════════════════════════════════════════════
     # ANALYTICS
     # ═══════════════════════════════════════════════════════════════════════════
 
@@ -334,10 +385,16 @@ class TenantManager:
                 (chatbot_id,),
             ).fetchone()["c"]
 
+            total_leads = conn.execute(
+                "SELECT COUNT(*) as c FROM leads WHERE chatbot_id = ?",
+                (chatbot_id,),
+            ).fetchone()["c"]
+
         return {
             "total_messages":  total_msgs,
             "unique_sessions": sessions,
             "documents":       docs,
+            "total_leads":     total_leads,
             "providers":       {r["provider"]: r["count"] for r in providers},
             "daily_messages":  [{"day": r["day"], "count": r["count"]} for r in daily],
         }

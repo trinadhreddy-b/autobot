@@ -86,9 +86,11 @@ OAUTH_REDIRECT_URI=http://localhost:8000/api/auth/oauth/google/callback
 
 ## Database
 
-SQLite at `database/platform.db`. Schema is auto-created by `tenant_manager.py` on startup via `executescript`. Tables: `clients`, `chatbots`, `documents`, `chat_logs`. WAL mode is enabled — if the server crashes, delete `platform.db-wal` and `platform.db-shm` before restarting.
+SQLite at `database/platform.db`. Schema is auto-created by `tenant_manager.py` on startup via `executescript`. Tables: `clients`, `chatbots`, `documents`, `chat_logs`, `leads`. WAL mode is enabled — if the server crashes, delete `platform.db-wal` and `platform.db-shm` before restarting.
 
-`chatbots` table has an `allowed_domains` column (TEXT, comma-separated hostnames). Added via `ALTER TABLE` migration on startup — safe on existing databases.
+`chatbots` table columns added via `ALTER TABLE` migration on startup (safe on existing DBs):
+- `allowed_domains` TEXT DEFAULT '' — comma-separated hostnames
+- `lead_form_enabled` INTEGER DEFAULT 0 — per-chatbot lead form toggle
 
 ## Frontend
 
@@ -98,7 +100,8 @@ The dashboard (`frontend/dashboard/`) is pure HTML/CSS/JS with no build step. It
 
 - **Passwords**: bcrypt (via `bcrypt` package). Old SHA-256 hashes auto-migrate to bcrypt on next login.
 - **Google OAuth**: Authorization Code flow. CSRF state token (TTL 600s). Account linking: if Google email matches existing account, OAuth is attached to it. OAuth-only accounts have empty `password_hash`.
-- **Domain restriction**: Per-chatbot `allowed_domains` field. Enforced on `/api/chat` and `/api/chatbot-config` via `check_domain_allowed()`. Hostnames normalized (port/scheme stripped). Empty = allow all.
+- **Lead capture form**: Per-chatbot opt-in (`lead_form_enabled`). Pre-chat form collects name/mobile/email/service requirement. Mandatory — no skip. Stored in `leads` table. One form per browser session (sessionStorage). Public endpoint `POST /api/leads` enforces domain check + global rate limit.
+- **Domain restriction**: Per-chatbot `allowed_domains` field. Enforced on `/api/chat`, `/api/chatbot-config`, and `/api/leads` via `check_domain_allowed()`. Hostnames normalized (port/scheme stripped). Empty = allow all.
 - **Rate limiting**: 30 req/60s per IP (global). 200 req/hour per chatbot (protects LLM quota).
 - **Chatbot IDs**: 16 hex chars to prevent enumeration.
 - **Note**: Domain restriction only blocks browsers (Origin header). Direct API calls can spoof it.
@@ -106,3 +109,5 @@ The dashboard (`frontend/dashboard/`) is pure HTML/CSS/JS with no build step. It
 ## Database
 
 `clients` table has `oauth_provider` and `oauth_id` columns (TEXT DEFAULT ''). Added via `ALTER TABLE` migration on startup alongside `allowed_domains`.
+
+`leads` table schema: `id` (PK), `chatbot_id` (FK → chatbots CASCADE), `session_id`, `name`, `mobile`, `email`, `requirement`, `created_at`.
