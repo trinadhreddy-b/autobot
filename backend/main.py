@@ -40,11 +40,13 @@ from .ingestion import DocumentIngestion
 from .vector_store import VectorStoreManager
 
 # ── Logging ──────────────────────────────────────────────────────────────────
+LOG_DIR = ROOT_DIR / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
     handlers=[
-        logging.FileHandler("../logs/app.log"),
+        logging.FileHandler(LOG_DIR / "app.log"),
         logging.StreamHandler(),
     ],
 )
