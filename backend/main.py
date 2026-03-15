@@ -53,7 +53,7 @@ logging.basicConfig(
 logger = logging.getLogger("main")
 
 # ── Config ───────────────────────────────────────────────────────────────────
-CONFIG_PATH = Path("../config.json")
+CONFIG_PATH = ROOT_DIR / "config.json"
 with open(CONFIG_PATH) as f:
     CONFIG = json.load(f)
 
