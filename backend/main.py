@@ -28,13 +28,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, field_validator
 import uvicorn
 from dotenv import load_dotenv
-load_dotenv(dotenv_path=Path("../.env"))  # load .env from project root
+
+# Load .env from project root (works both locally and in Docker/Railway where the workdir is /app)
+ROOT_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(dotenv_path=ROOT_DIR / ".env")
 
 # Internal modules
-from tenant_manager import TenantManager
-from rag_pipeline import RAGPipeline
-from ingestion import DocumentIngestion
-from vector_store import VectorStoreManager
+from .tenant_manager import TenantManager
+from .rag_pipeline import RAGPipeline
+from .ingestion import DocumentIngestion
+from .vector_store import VectorStoreManager
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
