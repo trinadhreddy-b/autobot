@@ -16,7 +16,8 @@ import logging
 from collections import defaultdict, deque
 from typing import Optional
 
-from llm_router import LLMRouter
+# Use explicit relative import so the module resolves when packaged as backend.*
+from .llm_router import LLMRouter
 
 logger = logging.getLogger("rag_pipeline")
 
