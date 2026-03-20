@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Run the server
 ```bash
-# From repo root — activates venv and starts server
-start.bat                          # Windows
-bash start.sh                      # Unix
+# From repo root
+venv/Scripts/python.exe -m uvicorn backend.main:app --host 0.0.0.0 --port 8000   # Windows
+venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000            # Unix
 
-# Manual (venv must be active)
-cd backend
-python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# Or use the helper scripts
+start.bat    # Windows
+bash start.sh  # Unix
 ```
 
 ### Install / update dependencies
@@ -40,7 +40,7 @@ git add <files> && git commit -m "message" && git push origin main
 
 ## Architecture
 
-The backend must always be run from the `backend/` directory — all relative paths (`../database`, `../chroma_db`, `../logs`, `../config.json`) resolve from there.
+Run the server from the **repo root** (not from `backend/`). Relative paths in tenant_manager.py and vector_store.py resolve using the `DATA_DIR` env var (default `..` relative to backend, or `/data` on Railway).
 
 ### Request flow
 ```
@@ -75,39 +75,72 @@ Upload endpoints return immediately and run `ingestion.ingest_file` / `ingestion
 
 `config.json` (repo root) controls platform name, API endpoint URL, default widget color, and `allowed_origins` for CORS. Read once at startup in `main.py`.
 
-`.env` (repo root, git-ignored) holds all API keys and `EMBED_MODEL`. Loaded via `python-dotenv` at the top of `main.py`.
+`.env` (repo root, git-ignored) holds all API keys. Loaded via `python-dotenv` at the top of `main.py`.
 
-Required `.env` vars for Google OAuth:
+### Required `.env` vars
 ```
-GOOGLE_CLIENT_ID=<from Google Cloud Console>
-GOOGLE_CLIENT_SECRET=<from Google Cloud Console>
-OAUTH_REDIRECT_URI=http://localhost:8000/api/auth/oauth/google/callback
+# LLM providers (at least one required)
+GEMINI_API_KEY=...
+GROQ_API_KEY=...
+
+# Embeddings
+EMBED_MODEL=BAAI/bge-small-en-v1.5
+
+# Admin panel & OTP email (Resend API — not SMTP, Railway blocks SMTP)
+ADMIN_EMAIL=your@email.com
+RESEND_API_KEY=re_...
+EMAIL_FROM=onboarding@resend.dev   # or your verified domain sender
+
+# Railway persistent volume (set to /data on Railway, leave unset locally)
+DATA_DIR=/data
 ```
+
+## Auth model
+
+- **No self-signup** — admin creates all client accounts
+- **Admin panel**: `/admin` — OTP-based login (6-digit code sent to ADMIN_EMAIL via Resend)
+- **Admin session**: 8-hour token stored in `sessionStorage`
+- **Client login**: email/password → Bearer token stored in `localStorage`
+- **must_change_password**: forced password change on first login; can also change anytime from sidebar
 
 ## Database
 
-SQLite at `database/platform.db`. Schema is auto-created by `tenant_manager.py` on startup via `executescript`. Tables: `clients`, `chatbots`, `documents`, `chat_logs`, `leads`. WAL mode is enabled — if the server crashes, delete `platform.db-wal` and `platform.db-shm` before restarting.
+SQLite path controlled by `DATA_DIR` env var: `{DATA_DIR}/database/platform.db`. Schema auto-created by `tenant_manager.py` on startup. WAL mode enabled — if server crashes, delete `platform.db-wal` and `platform.db-shm` before restarting.
 
-`chatbots` table columns added via `ALTER TABLE` migration on startup (safe on existing DBs):
+Tables: `clients`, `chatbots`, `documents`, `chat_logs`, `leads`
+
+`clients` table columns (all added via safe ALTER TABLE migrations on startup):
+- `oauth_provider` TEXT DEFAULT '' — kept for legacy, not used
+- `oauth_id` TEXT DEFAULT '' — kept for legacy, not used
+- `must_change_password` INTEGER DEFAULT 0 — forces password change on first login
+
+`chatbots` table columns added via ALTER TABLE:
 - `allowed_domains` TEXT DEFAULT '' — comma-separated hostnames
 - `lead_form_enabled` INTEGER DEFAULT 0 — per-chatbot lead form toggle
 
+`leads` table schema: `id` (PK), `chatbot_id` (FK → chatbots CASCADE), `session_id`, `name`, `mobile`, `email`, `requirement`, `created_at`.
+
 ## Frontend
 
-The dashboard (`frontend/dashboard/`) is pure HTML/CSS/JS with no build step. It auto-detects the API base URL from `window.location.origin`. The embeddable widget (`frontend/chatbot.js`) reads `data-chatbot-id` and `data-api-endpoint` from its own `<script>` tag, injects `chatbot.css` dynamically, and calls `/api/chatbot-config/{id}` on load for branding.
+- `frontend/dashboard/` — client dashboard, pure HTML/CSS/JS, no build step
+- `frontend/admin/` — admin panel (OTP login + client management)
+- `frontend/chatbot.js` — embeddable widget (single script tag)
+
+Dashboard auto-detects API base URL from `window.location.origin`. Static asset URLs have `?v=<timestamp>` injected at runtime by FastAPI to bust browser cache after deployments.
 
 ## Security
 
-- **Passwords**: bcrypt (via `bcrypt` package). Old SHA-256 hashes auto-migrate to bcrypt on next login.
-- **Google OAuth**: Authorization Code flow. CSRF state token (TTL 600s). Account linking: if Google email matches existing account, OAuth is attached to it. OAuth-only accounts have empty `password_hash`.
-- **Lead capture form**: Per-chatbot opt-in (`lead_form_enabled`). Pre-chat form collects name/mobile/email/service requirement. Mandatory — no skip. Stored in `leads` table. One form per browser session (sessionStorage). Public endpoint `POST /api/leads` enforces domain check + global rate limit.
-- **Domain restriction**: Per-chatbot `allowed_domains` field. Enforced on `/api/chat`, `/api/chatbot-config`, and `/api/leads` via `check_domain_allowed()`. Hostnames normalized (port/scheme stripped). Empty = allow all.
-- **Rate limiting**: 30 req/60s per IP (global). 200 req/hour per chatbot (protects LLM quota).
+- **Passwords**: bcrypt. Old SHA-256 hashes auto-migrate to bcrypt on next login.
+- **Admin OTP**: 6-digit, 10-minute TTL, single-use, stored in memory dict.
+- **Lead capture form**: Per-chatbot opt-in (`lead_form_enabled`). Mandatory — no skip. One form per browser session (sessionStorage).
+- **Domain restriction**: Per-chatbot `allowed_domains`. Enforced on `/api/chat`, `/api/chatbot-config`, `/api/leads`. Empty = allow all.
+- **Rate limiting**: 30 req/60s per IP (global). 200 req/hour per chatbot.
 - **Chatbot IDs**: 16 hex chars to prevent enumeration.
-- **Note**: Domain restriction only blocks browsers (Origin header). Direct API calls can spoof it.
 
-## Database
+## Railway deployment
 
-`clients` table has `oauth_provider` and `oauth_id` columns (TEXT DEFAULT ''). Added via `ALTER TABLE` migration on startup alongside `allowed_domains`.
-
-`leads` table schema: `id` (PK), `chatbot_id` (FK → chatbots CASCADE), `session_id`, `name`, `mobile`, `email`, `requirement`, `created_at`.
+- Persistent volume mounted at `/data` — set `DATA_DIR=/data` in Railway Variables
+- SQLite: `/data/database/platform.db`
+- ChromaDB: `/data/chroma_db`
+- **Do not use SMTP** — Railway blocks outbound SMTP. Use Resend API instead.
+- Required Railway env vars: `GEMINI_API_KEY`, `GROQ_API_KEY`, `EMBED_MODEL`, `ADMIN_EMAIL`, `RESEND_API_KEY`, `EMAIL_FROM`, `DATA_DIR`

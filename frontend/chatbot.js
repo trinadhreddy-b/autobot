@@ -358,6 +358,7 @@
       win.classList.remove("cb-hidden");
       win.classList.add("cb-visible");
       bubble.classList.add("cb-open");
+      bubble.style.display = "none";
       bubble.querySelector(".cb-badge")?.remove();
 
       if (config.lead_form_enabled && !leadCaptured) {
@@ -374,6 +375,7 @@
       win.classList.remove("cb-visible");
       win.classList.add("cb-hidden");
       bubble.classList.remove("cb-open");
+      bubble.style.display = "";
     }
   }
 
