@@ -9,12 +9,15 @@ import os
 import json
 import time
 import uuid
+import random
+import asyncio
 import logging
 import hashlib
 import bcrypt
+import smtplib
+from email.mime.text import MIMEText
 from datetime import datetime, timedelta
-from urllib.parse import urlparse, urlencode, quote
-import secrets
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import Optional
 
@@ -66,14 +69,18 @@ _chatbot_rate_store: dict[str, list[float]] = {}
 CHATBOT_RATE_LIMIT  = 200   # requests per chatbot
 CHATBOT_RATE_WINDOW = 3600  # 1 hour
 
-# ── Google OAuth config ───────────────────────────────────────────────────────
-GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-OAUTH_REDIRECT_URI   = os.getenv("OAUTH_REDIRECT_URI", "http://localhost:8000/api/auth/oauth/google/callback")
+# ── Admin / SMTP config ───────────────────────────────────────────────────────
+ADMIN_EMAIL   = os.getenv("ADMIN_EMAIL", "")
+SMTP_HOST     = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT     = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER     = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM     = os.getenv("SMTP_FROM", SMTP_USER)
 
-# CSRF state store: {state_token: expiry_timestamp}
-_oauth_states: dict[str, float] = {}
-OAUTH_STATE_TTL = 600  # 10 minutes
+_admin_otp:      dict[str, float] = {}   # {otp_code: expiry}
+_admin_sessions: dict[str, float] = {}   # {token: expiry}
+ADMIN_OTP_TTL     = 600    # 10 minutes
+ADMIN_SESSION_TTL = 28800  # 8 hours
 
 def check_rate_limit(ip: str) -> None:
     now = time.time()
@@ -121,7 +128,24 @@ ingestion   = DocumentIngestion(vector_mgr, tenant_mgr)
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
-class ClientRegister(BaseModel):
+class ClientLogin(BaseModel):
+    email: str
+    password: str
+
+
+class ChangePassword(BaseModel):
+    old_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def pw_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
+class AdminCreateClient(BaseModel):
     name: str
     email: str
     password: str
@@ -135,9 +159,8 @@ class ClientRegister(BaseModel):
         return v
 
 
-class ClientLogin(BaseModel):
-    email: str
-    password: str
+class AdminVerifyOTP(BaseModel):
+    otp: str
 
 
 class ChatRequest(BaseModel):
@@ -220,11 +243,35 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, stored_hash: str) -> bool:
     if not stored_hash:
-        return False  # OAuth-only account — no password set
+        return False
     # Support migration from old SHA-256 hashes (64 hex chars, no $ prefix)
     if not stored_hash.startswith("$2"):
         return hashlib.sha256(password.encode()).hexdigest() == stored_hash
     return bcrypt.checkpw(password.encode(), stored_hash.encode())
+
+
+def _send_email_sync(to: str, subject: str, body: str) -> None:
+    msg = MIMEText(body, "plain")
+    msg["Subject"] = subject
+    msg["From"]    = SMTP_FROM
+    msg["To"]      = to
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as s:
+        s.starttls()
+        s.login(SMTP_USER, SMTP_PASSWORD)
+        s.sendmail(SMTP_FROM, [to], msg.as_string())
+
+async def send_email(to: str, subject: str, body: str) -> None:
+    await asyncio.to_thread(_send_email_sync, to, subject, body)
+
+
+def get_admin_from_token(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+    token = authorization.split(" ", 1)[1]
+    expiry = _admin_sessions.get(token)
+    if not expiry or time.time() > expiry:
+        raise HTTPException(status_code=401, detail="Admin session expired or invalid")
+    return True
 
 
 def get_client_from_token(authorization: Optional[str] = Header(None)):
@@ -263,26 +310,6 @@ def check_domain_allowed(bot: dict, request: Request) -> None:
 # AUTH ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@app.post("/api/auth/register", tags=["Auth"])
-async def register(body: ClientRegister, request: Request):
-    """Register a new client account."""
-    check_rate_limit(request.client.host)
-    if tenant_mgr.get_client_by_email(body.email):
-        raise HTTPException(status_code=409, detail="Email already registered")
-    client_id = str(uuid.uuid4())
-    token     = str(uuid.uuid4())
-    tenant_mgr.create_client(
-        client_id=client_id,
-        name=body.name,
-        email=body.email,
-        password_hash=hash_password(body.password),
-        company=body.company,
-        token=token,
-    )
-    logger.info("New client registered: %s (%s)", body.email, client_id)
-    return {"client_id": client_id, "token": token, "message": "Registration successful"}
-
-
 @app.post("/api/auth/login", tags=["Auth"])
 async def login(body: ClientLogin, request: Request):
     """Authenticate and receive a session token."""
@@ -296,112 +323,106 @@ async def login(body: ClientLogin, request: Request):
     if not client["password_hash"].startswith("$2"):
         tenant_mgr.update_client_password(client["client_id"], hash_password(body.password))
     return {
-        "client_id": client["client_id"],
-        "token": token,
-        "name": client["name"],
-        "email": client["email"],
+        "client_id":           client["client_id"],
+        "token":               token,
+        "name":                client["name"],
+        "email":               client["email"],
+        "must_change_password": bool(client.get("must_change_password", 0)),
     }
 
 
-# ── Google OAuth ──────────────────────────────────────────────────────────────
+@app.post("/api/auth/change-password", tags=["Auth"])
+async def change_password(body: ChangePassword, client=Depends(get_client_from_token)):
+    """Allow an authenticated client to change their password."""
+    if not verify_password(body.old_password, client["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    tenant_mgr.update_client_password(client["client_id"], hash_password(body.new_password), clear_must_change=True)
+    return {"message": "Password updated successfully"}
 
-@app.get("/api/auth/oauth/google/authorize", tags=["Auth"])
-async def google_oauth_authorize(request: Request):
-    """Redirect the browser to Google's OAuth consent screen."""
-    if not GOOGLE_CLIENT_ID:
-        raise HTTPException(status_code=501, detail="Google OAuth is not configured on this server")
+
+# ── Admin OTP & Session ───────────────────────────────────────────────────────
+
+@app.post("/api/admin/request-otp", tags=["Admin"])
+async def admin_request_otp(request: Request):
+    """Generate a 6-digit OTP and email it to the configured ADMIN_EMAIL."""
     check_rate_limit(request.client.host)
-    state = secrets.token_hex(16)
-    _oauth_states[state] = time.time() + OAUTH_STATE_TTL
-    params = urlencode({
-        "client_id":     GOOGLE_CLIENT_ID,
-        "redirect_uri":  OAUTH_REDIRECT_URI,
-        "response_type": "code",
-        "scope":         "openid email profile",
-        "state":         state,
-        "access_type":   "online",
-    })
-    return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
+    if not ADMIN_EMAIL:
+        raise HTTPException(status_code=501, detail="ADMIN_EMAIL is not configured")
+    if not SMTP_USER or not SMTP_PASSWORD:
+        raise HTTPException(status_code=501, detail="SMTP credentials are not configured")
+    otp = f"{random.randint(0, 999999):06d}"
+    _admin_otp.clear()
+    _admin_otp[otp] = time.time() + ADMIN_OTP_TTL
+    try:
+        await send_email(
+            to=ADMIN_EMAIL,
+            subject="Your Admin OTP",
+            body=f"Your one-time password is: {otp}\n\nValid for 10 minutes.",
+        )
+    except Exception as e:
+        logger.error("Failed to send OTP email: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to send OTP email. Check SMTP config.")
+    logger.info("Admin OTP sent to %s", ADMIN_EMAIL)
+    return {"message": "OTP sent to admin email"}
 
 
-@app.get("/api/auth/oauth/google/callback", tags=["Auth"])
-async def google_oauth_callback(request: Request, code: str = "", state: str = "", error: str = ""):
-    """Handle Google's OAuth callback: exchange code, create/login user, redirect to dashboard."""
-    if error:
-        return RedirectResponse("/?oauth_error=" + quote(error))
-
-    # Validate CSRF state
-    expiry = _oauth_states.pop(state, None)
+@app.post("/api/admin/verify-otp", tags=["Admin"])
+async def admin_verify_otp(body: AdminVerifyOTP, request: Request):
+    """Validate the OTP and return an 8-hour admin session token."""
+    check_rate_limit(request.client.host)
+    expiry = _admin_otp.get(body.otp)
     if not expiry or time.time() > expiry:
-        return RedirectResponse("/?oauth_error=invalid_state")
+        raise HTTPException(status_code=401, detail="Invalid or expired OTP")
+    del _admin_otp[body.otp]
+    token = str(uuid.uuid4())
+    _admin_sessions[token] = time.time() + ADMIN_SESSION_TTL
+    logger.info("Admin session created")
+    return {"token": token}
 
-    # Exchange authorization code for tokens
-    import httpx as _httpx
-    async with _httpx.AsyncClient() as hc:
-        token_resp = await hc.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "code":          code,
-                "client_id":     GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
-                "redirect_uri":  OAUTH_REDIRECT_URI,
-                "grant_type":    "authorization_code",
-            },
-        )
-    if token_resp.status_code != 200:
-        logger.error("Google token exchange failed: %s", token_resp.text)
-        return RedirectResponse("/?oauth_error=token_exchange_failed")
 
-    access_token = token_resp.json().get("access_token")
+# ── Admin Client Management ───────────────────────────────────────────────────
 
-    # Fetch user info from Google
-    async with _httpx.AsyncClient() as hc:
-        info_resp = await hc.get(
-            "https://www.googleapis.com/oauth2/v3/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-    if info_resp.status_code != 200:
-        return RedirectResponse("/?oauth_error=userinfo_failed")
+@app.get("/api/admin/clients", tags=["Admin"])
+async def admin_list_clients(_=Depends(get_admin_from_token)):
+    """List all client accounts."""
+    return {"clients": tenant_mgr.list_clients()}
 
-    guser     = info_resp.json()
-    google_sub = guser.get("sub")          # stable unique Google user ID
-    email      = guser.get("email", "")
-    name       = guser.get("name") or email.split("@")[0]
 
-    # Find or create account
-    existing = tenant_mgr.get_client_by_oauth("google", google_sub)
-    if not existing:
-        # Check if same email already registered with password — link the accounts
-        existing = tenant_mgr.get_client_by_email(email)
-        if existing:
-            tenant_mgr.update_client_oauth(existing["client_id"], "google", google_sub)
-        else:
-            # Brand-new user — create account (no password)
-            client_id = str(uuid.uuid4())
-            tenant_mgr.create_client(
-                client_id=client_id,
-                name=name,
-                email=email,
-                password_hash="",
-                company="",
-                token="",
-                oauth_provider="google",
-                oauth_id=google_sub,
-            )
-            existing = {"client_id": client_id, "name": name, "email": email}
+@app.post("/api/admin/clients", tags=["Admin"])
+async def admin_create_client(body: AdminCreateClient, _=Depends(get_admin_from_token)):
+    """Create a new client account with a temporary password."""
+    if tenant_mgr.get_client_by_email(body.email):
+        raise HTTPException(status_code=409, detail="Email already registered")
+    client_id = str(uuid.uuid4())
+    token     = str(uuid.uuid4())
+    tenant_mgr.create_client(
+        client_id=client_id,
+        name=body.name,
+        email=body.email,
+        password_hash=hash_password(body.password),
+        company=body.company or "",
+        token=token,
+        must_change_password=1,
+    )
+    logger.info("Admin created client: %s (%s)", body.email, client_id)
+    return {"client_id": client_id, "message": "Client created"}
 
-    # Issue a session token and redirect to dashboard
-    session_token = str(uuid.uuid4())
-    tenant_mgr.update_client_token(existing["client_id"], session_token)
-    logger.info("Google OAuth login: %s (%s)", email, existing["client_id"])
 
-    params = urlencode({
-        "oauth_token": session_token,
-        "client_id":   existing["client_id"],
-        "name":        existing.get("name") or name,
-        "email":       email,
-    })
-    return RedirectResponse(f"/?{params}")
+@app.delete("/api/admin/clients/{client_id}", tags=["Admin"])
+async def admin_delete_client(client_id: str, _=Depends(get_admin_from_token)):
+    """Delete a client and all their chatbots/data (CASCADE)."""
+    client = tenant_mgr.get_client_by_id(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    # Delete all chatbot vector collections for this client
+    for bot in tenant_mgr.get_chatbots_for_client(client_id):
+        try:
+            vector_mgr.delete_collection(bot["chatbot_id"])
+        except Exception:
+            pass
+    tenant_mgr.delete_client(client_id)
+    logger.info("Admin deleted client: %s", client_id)
+    return {"message": "Client deleted"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -769,6 +790,14 @@ async def serve_dashboard():
     if dashboard.exists():
         return HTMLResponse(dashboard.read_text(encoding="utf-8"))
     return HTMLResponse("<h1>Dashboard not found</h1>")
+
+
+@app.get("/admin", response_class=HTMLResponse, tags=["Pages"])
+async def serve_admin():
+    admin_page = ROOT_DIR / "frontend" / "admin" / "index.html"
+    if admin_page.exists():
+        return HTMLResponse(admin_page.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>Admin page not found</h1>")
 
 
 @app.get("/widget-demo", response_class=HTMLResponse, tags=["Pages"])

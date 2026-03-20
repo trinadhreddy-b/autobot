@@ -18,28 +18,10 @@ const PAGE_SIZE   = 20;
 
 // â”€â”€ Boot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.addEventListener("DOMContentLoaded", () => {
-  // Handle redirect back from Google OAuth
-  const urlParams = new URLSearchParams(window.location.search);
-  const oauthToken = urlParams.get("oauth_token");
-  const oauthError = urlParams.get("oauth_error");
-  if (oauthToken) {
-    saveAuth({
-      token:     oauthToken,
-      client_id: urlParams.get("client_id") || "",
-      name:      urlParams.get("name")      || "",
-      email:     urlParams.get("email")     || "",
-    });
-    window.history.replaceState({}, document.title, "/");
-  }
-  if (oauthError) {
-    window.history.replaceState({}, document.title, "/");
-  }
-
   if (authToken) {
     showApp();
   } else {
     showAuth();
-    if (oauthError) showErr("login-error", "Google sign-in failed: " + oauthError.replace(/_/g, " "));
   }
 
   const uploadArea = document.getElementById("upload-area");
@@ -99,10 +81,9 @@ function setLoading(btn, loading) {
 
 // â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function showAuth()     { show("auth-screen"); hide("app"); showLogin(); }
-function showApp()      { hide("auth-screen"); show("app"); initApp(); }
-function showLogin()    { show("login-form"); hide("register-form"); hide("login-error"); }
-function showRegister() { hide("login-form"); show("register-form"); hide("register-error"); }
+function showAuth()  { show("auth-screen"); hide("app"); showLogin(); }
+function showApp()   { hide("auth-screen"); show("app"); initApp(); }
+function showLogin() { show("login-form"); hide("login-error"); }
 
 async function doLogin() {
   const email    = val("login-email");
@@ -110,36 +91,26 @@ async function doLogin() {
   hide("login-error");
   if (!email || !password) { showErr("login-error", "Please fill in all fields."); return; }
 
-  const resp = await apiFetch("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-  if (!resp) return;
-  const data = await resp.json();
+  let resp, data;
+  try {
+    resp = await fetch(API + "/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    data = await resp.json();
+  } catch (e) {
+    showErr("login-error", "Network error. Please try again."); return;
+  }
   if (!resp.ok) { showErr("login-error", data.detail || "Login failed."); return; }
 
   saveAuth(data);
-  showApp();
-}
-
-async function doRegister() {
-  const name     = val("reg-name");
-  const email    = val("reg-email");
-  const company  = val("reg-company");
-  const password = val("reg-password");
-  hide("register-error");
-  if (!name || !email || !password) { showErr("register-error", "Please fill in all required fields."); return; }
-
-  const resp = await apiFetch("/api/auth/register", {
-    method: "POST",
-    body: JSON.stringify({ name, email, company, password }),
-  });
-  if (!resp) return;
-  const data = await resp.json();
-  if (!resp.ok) { showErr("register-error", data.detail || "Registration failed."); return; }
-
-  saveAuth({ ...data, name, email });
-  showApp();
+  if (data.must_change_password) {
+    showApp();
+    openChangePassword(true);  // forced — no cancel
+  } else {
+    showApp();
+  }
 }
 
 function saveAuth(data) {
@@ -157,6 +128,47 @@ function doLogout() {
   authToken = authClientId = authName = authEmail = "";
   localStorage.clear();
   showAuth();
+}
+
+// ── Change Password ──────────────────────────────────────────────────────────
+
+function openChangePassword(forced = false) {
+  byId("cp-old").value = "";
+  byId("cp-new").value = "";
+  byId("cp-confirm").value = "";
+  hide("change-pw-error");
+  const notice = byId("change-pw-notice");
+  const cancelBtn = byId("cp-cancel-btn");
+  if (forced) {
+    show(notice); cancelBtn.classList.add("hidden");
+  } else {
+    hide(notice); cancelBtn.classList.remove("hidden");
+  }
+  show("change-password-overlay");
+}
+
+function closeChangePassword() {
+  hide("change-password-overlay");
+}
+
+async function doChangePassword() {
+  const oldPw  = byId("cp-old").value;
+  const newPw  = byId("cp-new").value;
+  const confirm = byId("cp-confirm").value;
+  hide("change-pw-error");
+  if (!oldPw || !newPw || !confirm) { showErr("change-pw-error", "All fields are required."); return; }
+  if (newPw.length < 8) { showErr("change-pw-error", "New password must be at least 8 characters."); return; }
+  if (newPw !== confirm) { showErr("change-pw-error", "New passwords do not match."); return; }
+
+  const resp = await apiFetch("/api/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ old_password: oldPw, new_password: newPw }),
+  });
+  if (!resp) return;
+  const data = await resp.json();
+  if (!resp.ok) { showErr("change-pw-error", data.detail || "Failed to change password."); return; }
+  closeChangePassword();
+  showToast("Password updated successfully.");
 }
 
 // â”€â”€ App init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

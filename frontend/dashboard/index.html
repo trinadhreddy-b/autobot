@@ -36,48 +36,6 @@
         <input type="password" id="login-password" placeholder="********" autocomplete="current-password"/>
       </label>
       <button class="btn btn-primary full-width" onclick="doLogin()">Sign In</button>
-      <div class="oauth-divider"><span>or</span></div>
-      <a href="/api/auth/oauth/google/authorize" class="btn btn-google full-width">
-        <svg width="18" height="18" viewBox="0 0 48 48" style="flex-shrink:0">
-          <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13 17.8 9.5 24 9.5z"/>
-          <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/>
-          <path fill="#FBBC05" d="M10.6 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l8-6.2z"/>
-          <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.7 2.2-6.2 0-11.5-4.2-13.4-9.8l-8 6.2C6.5 42.6 14.6 48 24 48z"/>
-        </svg>
-        Continue with Google
-      </a>
-      <p class="auth-switch">Don't have an account? <a href="#" onclick="showRegister()">Create one</a></p>
-    </div>
-
-    <!-- Register form -->
-    <div id="register-form" class="hidden">
-      <h2>Create Account</h2>
-      <p class="auth-sub">Get started - it's free.</p>
-      <div id="register-error" class="alert alert-error hidden"></div>
-      <label>Full Name
-        <input type="text" id="reg-name" placeholder="Jane Doe"/>
-      </label>
-      <label>Email
-        <input type="email" id="reg-email" placeholder="you@example.com"/>
-      </label>
-      <label>Company (optional)
-        <input type="text" id="reg-company" placeholder="Acme Inc."/>
-      </label>
-      <label>Password
-        <input type="password" id="reg-password" placeholder="Min 8 characters"/>
-      </label>
-      <button class="btn btn-primary full-width" onclick="doRegister()">Create Account</button>
-      <div class="oauth-divider"><span>or</span></div>
-      <a href="/api/auth/oauth/google/authorize" class="btn btn-google full-width">
-        <svg width="18" height="18" viewBox="0 0 48 48" style="flex-shrink:0">
-          <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.5 30.2 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13 17.8 9.5 24 9.5z"/>
-          <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17z"/>
-          <path fill="#FBBC05" d="M10.6 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.9-6.1A23.9 23.9 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l8-6.2z"/>
-          <path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2 1.4-4.6 2.2-7.7 2.2-6.2 0-11.5-4.2-13.4-9.8l-8 6.2C6.5 42.6 14.6 48 24 48z"/>
-        </svg>
-        Sign up with Google
-      </a>
-      <p class="auth-switch">Already have an account? <a href="#" onclick="showLogin()">Sign in</a></p>
     </div>
   </div>
 </div>
@@ -121,6 +79,7 @@
           <div class="user-email" id="user-email-display">-</div>
         </div>
       </div>
+      <button class="btn btn-ghost btn-sm" onclick="openChangePassword()">Change Password</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
     </div>
   </aside>
@@ -334,6 +293,34 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="doCreateChatbot()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Overlay -->
+<div id="change-password-overlay" class="modal-overlay hidden">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:420px">
+    <div class="modal-header">
+      <h3 id="change-pw-title">Change Password</h3>
+    </div>
+    <div class="modal-body">
+      <div id="change-pw-notice" class="alert alert-error hidden" style="background:#fef3c7;color:#92400e;margin-bottom:16px">
+        You must set a new password before continuing.
+      </div>
+      <div id="change-pw-error" class="alert alert-error hidden"></div>
+      <label>Current Password
+        <input type="password" id="cp-old" placeholder="Your current password" />
+      </label>
+      <label>New Password
+        <input type="password" id="cp-new" placeholder="Min 8 characters" />
+      </label>
+      <label>Confirm New Password
+        <input type="password" id="cp-confirm" placeholder="Repeat new password" />
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button id="cp-cancel-btn" class="btn btn-ghost" onclick="closeChangePassword()">Cancel</button>
+      <button class="btn btn-primary" onclick="doChangePassword()">Update Password</button>
     </div>
   </div>
 </div>

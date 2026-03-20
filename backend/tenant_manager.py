@@ -136,6 +136,11 @@ class TenantManager:
                 conn.execute("ALTER TABLE chatbots ADD COLUMN lead_form_enabled INTEGER DEFAULT 0")
             except Exception:
                 pass  # column already exists
+            # Migration: add must_change_password to clients
+            try:
+                conn.execute("ALTER TABLE clients ADD COLUMN must_change_password INTEGER DEFAULT 0")
+            except Exception:
+                pass  # column already exists
         logger.info("Database initialised at %s", self._db_path)
 
     @staticmethod
@@ -151,14 +156,14 @@ class TenantManager:
     # ═══════════════════════════════════════════════════════════════════════════
 
     def create_client(self, client_id, name, email, password_hash, company, token,
-                      oauth_provider="", oauth_id=""):
+                      oauth_provider="", oauth_id="", must_change_password=0):
         with self._connect() as conn:
             conn.execute(
                 """INSERT INTO clients
-                   (client_id, name, email, password_hash, company, token, oauth_provider, oauth_id, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (client_id, name, email, password_hash, company, token, oauth_provider, oauth_id, must_change_password, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (client_id, name, email, password_hash, company, token,
-                 oauth_provider, oauth_id, self._now()),
+                 oauth_provider, oauth_id, must_change_password, self._now()),
             )
 
     def get_client_by_email(self, email: str) -> Optional[dict]:
@@ -182,12 +187,36 @@ class TenantManager:
                 (token, client_id),
             )
 
-    def update_client_password(self, client_id: str, password_hash: str) -> None:
+    def update_client_password(self, client_id: str, password_hash: str, clear_must_change: bool = False) -> None:
         with self._connect() as conn:
-            conn.execute(
-                "UPDATE clients SET password_hash = ? WHERE client_id = ?",
-                (password_hash, client_id),
-            )
+            if clear_must_change:
+                conn.execute(
+                    "UPDATE clients SET password_hash = ?, must_change_password = 0 WHERE client_id = ?",
+                    (password_hash, client_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE clients SET password_hash = ? WHERE client_id = ?",
+                    (password_hash, client_id),
+                )
+
+    def list_clients(self) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT client_id, name, email, company, must_change_password, created_at FROM clients ORDER BY created_at DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_client_by_id(self, client_id: str) -> Optional[dict]:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM clients WHERE client_id = ?", (client_id,)
+            ).fetchone()
+        return self._row_to_dict(row)
+
+    def delete_client(self, client_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM clients WHERE client_id = ?", (client_id,))
 
     def get_client_by_oauth(self, provider: str, oauth_id: str) -> Optional[dict]:
         with self._connect() as conn:
