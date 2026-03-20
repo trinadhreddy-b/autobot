@@ -19,7 +19,8 @@ from sentence_transformers import SentenceTransformer
 logger = logging.getLogger("vector_store")
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-CHROMA_DIR = Path("../chroma_db")
+_DATA_DIR = Path(os.getenv("DATA_DIR", ".."))
+CHROMA_DIR = _DATA_DIR / "chroma_db"
 CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Embedding model (cached after first load) ─────────────────────────────────

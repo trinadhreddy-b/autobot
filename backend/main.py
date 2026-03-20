@@ -784,11 +784,19 @@ async def get_chatbot_config(chatbot_id: str, request: Request):
 # SERVE DASHBOARD & WIDGET
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Cache-bust version — changes on every server start so browsers always fetch fresh JS/CSS
+_ASSET_VERSION = str(int(time.time()))
+
+def _inject_version(html: str) -> str:
+    """Append ?v=<timestamp> to all local /static asset URLs to bust browser cache."""
+    import re
+    return re.sub(r'(href|src)="(/static/[^"]+)"', rf'\1="\2?v={_ASSET_VERSION}"', html)
+
 @app.get("/", response_class=HTMLResponse, tags=["Pages"])
 async def serve_dashboard():
     dashboard = ROOT_DIR / "frontend" / "dashboard" / "index.html"
     if dashboard.exists():
-        return HTMLResponse(dashboard.read_text(encoding="utf-8"))
+        return HTMLResponse(_inject_version(dashboard.read_text(encoding="utf-8")))
     return HTMLResponse("<h1>Dashboard not found</h1>")
 
 
@@ -796,7 +804,7 @@ async def serve_dashboard():
 async def serve_admin():
     admin_page = ROOT_DIR / "frontend" / "admin" / "index.html"
     if admin_page.exists():
-        return HTMLResponse(admin_page.read_text(encoding="utf-8"))
+        return HTMLResponse(_inject_version(admin_page.read_text(encoding="utf-8")))
     return HTMLResponse("<h1>Admin page not found</h1>")
 
 
@@ -819,6 +827,19 @@ async def serve_chatbot_js():
 # ═══════════════════════════════════════════════════════════════════════════════
 # HEALTH CHECK
 # ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/favicon.ico", tags=["Pages"])
+async def favicon():
+    from fastapi.responses import Response
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">'
+        '<circle cx="20" cy="20" r="20" fill="#2563eb"/>'
+        '<path d="M12 26V14l8 6 8-6v12" stroke="#fff" stroke-width="2.5"'
+        ' stroke-linecap="round" stroke-linejoin="round"/>'
+        '</svg>'
+    )
+    return Response(content=svg, media_type="image/svg+xml")
+
 
 @app.get("/api/health", tags=["System"])
 async def health():

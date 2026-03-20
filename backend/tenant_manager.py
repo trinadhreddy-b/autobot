@@ -20,7 +20,9 @@ from typing import Optional
 
 logger = logging.getLogger("tenant_manager")
 
-DB_PATH = Path("../database/platform.db")
+import os as _os
+_DATA_DIR = Path(_os.getenv("DATA_DIR", ".."))
+DB_PATH = _DATA_DIR / "database" / "platform.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
