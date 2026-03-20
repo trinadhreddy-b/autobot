@@ -10,12 +10,10 @@ import json
 import time
 import uuid
 import random
-import asyncio
 import logging
 import hashlib
 import bcrypt
-import smtplib
-from email.mime.text import MIMEText
+import httpx as _httpx
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from pathlib import Path
@@ -69,13 +67,10 @@ _chatbot_rate_store: dict[str, list[float]] = {}
 CHATBOT_RATE_LIMIT  = 200   # requests per chatbot
 CHATBOT_RATE_WINDOW = 3600  # 1 hour
 
-# ── Admin / SMTP config ───────────────────────────────────────────────────────
-ADMIN_EMAIL   = os.getenv("ADMIN_EMAIL", "")
-SMTP_HOST     = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT     = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER     = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM     = os.getenv("SMTP_FROM", SMTP_USER)
+# ── Admin / Email config ──────────────────────────────────────────────────────
+ADMIN_EMAIL     = os.getenv("ADMIN_EMAIL", "")
+RESEND_API_KEY  = os.getenv("RESEND_API_KEY", "")
+EMAIL_FROM      = os.getenv("EMAIL_FROM", "onboarding@resend.dev")
 
 _admin_otp:      dict[str, float] = {}   # {otp_code: expiry}
 _admin_sessions: dict[str, float] = {}   # {token: expiry}
@@ -250,18 +245,15 @@ def verify_password(password: str, stored_hash: str) -> bool:
     return bcrypt.checkpw(password.encode(), stored_hash.encode())
 
 
-def _send_email_sync(to: str, subject: str, body: str) -> None:
-    msg = MIMEText(body, "plain")
-    msg["Subject"] = subject
-    msg["From"]    = SMTP_FROM
-    msg["To"]      = to
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as s:
-        s.starttls()
-        s.login(SMTP_USER, SMTP_PASSWORD)
-        s.sendmail(SMTP_FROM, [to], msg.as_string())
-
 async def send_email(to: str, subject: str, body: str) -> None:
-    await asyncio.to_thread(_send_email_sync, to, subject, body)
+    async with _httpx.AsyncClient(timeout=10) as hc:
+        resp = await hc.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+            json={"from": EMAIL_FROM, "to": [to], "subject": subject, "text": body},
+        )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"Resend API error {resp.status_code}: {resp.text}")
 
 
 def get_admin_from_token(authorization: Optional[str] = Header(None)):
@@ -348,8 +340,8 @@ async def admin_request_otp(request: Request):
     check_rate_limit(request.client.host)
     if not ADMIN_EMAIL:
         raise HTTPException(status_code=501, detail="ADMIN_EMAIL is not configured")
-    if not SMTP_USER or not SMTP_PASSWORD:
-        raise HTTPException(status_code=501, detail="SMTP credentials are not configured")
+    if not RESEND_API_KEY:
+        raise HTTPException(status_code=501, detail="RESEND_API_KEY is not configured")
     otp = f"{random.randint(0, 999999):06d}"
     _admin_otp.clear()
     _admin_otp[otp] = time.time() + ADMIN_OTP_TTL
