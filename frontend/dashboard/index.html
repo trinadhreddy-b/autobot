@@ -155,6 +155,11 @@
         </div>
 
         <div id="docs-list" class="docs-list"></div>
+        <div style="margin-top:12px">
+          <button class="btn btn-ghost btn-sm" onclick="rebuildKnowledgeBase()" title="Wipe and re-index all documents — fixes orphaned vectors from failed deletions">
+            ↺ Rebuild Knowledge Base
+          </button>
+        </div>
       </div>
 
       <!-- Embed tab -->
@@ -230,6 +235,35 @@
           <label>Allowed Domains
             <textarea id="setting-domains" rows="3" placeholder="example.com&#10;app.mysite.com&#10;(leave empty to allow all domains)"></textarea>
             <small style="color:#94a3b8">One domain per line. Leave empty to allow all domains.</small>
+          </label>
+          <label>Chat Bubble Icon
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <label style="flex-direction:row;align-items:center;gap:6px;cursor:pointer;font-weight:normal">
+                  <input type="radio" name="icon-type" value="default" id="icon-type-default" checked/>
+                  <span>Default</span>
+                </label>
+                <label style="flex-direction:row;align-items:center;gap:6px;cursor:pointer;font-weight:normal">
+                  <input type="radio" name="icon-type" value="image" id="icon-type-image"/>
+                  <span>Custom Image</span>
+                </label>
+              </div>
+              <div id="icon-image-row" style="display:none;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <img id="icon-preview" src="" alt="icon preview"
+                       style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;display:none"/>
+                  <div>
+                    <label class="btn btn-secondary" style="cursor:pointer;display:inline-block;margin:0">
+                      Choose Image
+                      <input type="file" id="setting-icon-file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                             style="display:none" onchange="uploadChatbotIcon(this)"/>
+                    </label>
+                    <small style="color:#94a3b8;display:block;margin-top:4px">PNG, JPG, GIF, WebP, SVG — max 2 MB</small>
+                  </div>
+                </div>
+                <div id="icon-upload-status" style="font-size:13px;color:#64748b"></div>
+              </div>
+            </div>
           </label>
           <label style="flex-direction:row;align-items:center;gap:10px;cursor:pointer">
             <input type="checkbox" id="setting-lead-form" style="width:16px;height:16px;cursor:pointer"/>

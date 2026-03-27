@@ -115,6 +115,11 @@ FRONTEND_DIR = ROOT_DIR / "frontend"
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
+_DATA_DIR = Path(os.getenv("DATA_DIR", str(ROOT_DIR)))
+ICONS_DIR = _DATA_DIR / "chatbot_icons"
+ICONS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/icons", StaticFiles(directory=str(ICONS_DIR)), name="icons")
+
 # ── Service singletons ────────────────────────────────────────────────────────
 tenant_mgr  = TenantManager()
 vector_mgr  = VectorStoreManager()
@@ -192,6 +197,8 @@ class UpdateChatbotRequest(BaseModel):
     color: Optional[str] = None
     allowed_domains: Optional[list[str]] = None
     lead_form_enabled: Optional[int] = None
+    icon_type: Optional[str] = None   # "default" | "emoji" | "image"
+    icon_value: Optional[str] = None  # emoji char or image URL
 
 
 class LeadSubmit(BaseModel):
@@ -474,6 +481,28 @@ async def update_chatbot(chatbot_id: str, body: UpdateChatbotRequest, client=Dep
     return {"message": "Chatbot updated"}
 
 
+@app.post("/api/chatbots/{chatbot_id}/icon", tags=["Chatbots"])
+async def upload_chatbot_icon(chatbot_id: str, file: UploadFile = File(...), client=Depends(get_client_from_token)):
+    """Upload a custom icon image for the chat bubble."""
+    bot = tenant_mgr.get_chatbot(chatbot_id)
+    if not bot or bot["client_id"] != client["client_id"]:
+        raise HTTPException(status_code=404, detail="Chatbot not found")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    ext = Path(file.filename).suffix.lower() if file.filename else ".png"
+    allowed_exts = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+    if ext not in allowed_exts:
+        raise HTTPException(status_code=400, detail="Unsupported image format")
+    dest = ICONS_DIR / f"{chatbot_id}{ext}"
+    content = await file.read()
+    if len(content) > 2 * 1024 * 1024:  # 2 MB limit
+        raise HTTPException(status_code=400, detail="Image must be under 2 MB")
+    dest.write_bytes(content)
+    icon_url = f"/icons/{chatbot_id}{ext}"
+    tenant_mgr.update_chatbot(chatbot_id, {"icon_type": "image", "icon_value": icon_url})
+    return {"url": icon_url}
+
+
 @app.delete("/api/chatbots/{chatbot_id}", tags=["Chatbots"])
 async def delete_chatbot(chatbot_id: str, client=Depends(get_client_from_token)):
     """Delete a chatbot and all its data."""
@@ -590,6 +619,50 @@ async def delete_document(chatbot_id: str, doc_id: str, client=Depends(get_clien
     return {"message": "Document deleted"}
 
 
+@app.post("/api/chatbots/{chatbot_id}/rebuild-knowledge-base", tags=["Documents"])
+async def rebuild_knowledge_base(
+    chatbot_id: str,
+    background_tasks: BackgroundTasks,
+    client=Depends(get_client_from_token),
+):
+    """Wipe the ChromaDB collection and re-ingest all ready documents.
+    Use this to fix orphaned vectors left by failed deletions."""
+    bot = tenant_mgr.get_chatbot(chatbot_id)
+    if not bot or bot["client_id"] != client["client_id"]:
+        raise HTTPException(status_code=404, detail="Chatbot not found")
+
+    # Wipe the entire collection — removes all vectors including orphans
+    vector_mgr.delete_collection(chatbot_id)
+
+    # Re-ingest every document currently tracked in SQLite
+    docs = tenant_mgr.get_documents(chatbot_id)
+    requeued = 0
+    for doc in docs:
+        if doc.get("stored_path", "").startswith("http"):
+            background_tasks.add_task(
+                ingestion.ingest_url,
+                url=doc["stored_path"],
+                chatbot_id=chatbot_id,
+                doc_id=doc["doc_id"],
+            )
+        else:
+            path = doc.get("stored_path", "")
+            if path and Path(path).exists():
+                tenant_mgr.update_document_status(doc["doc_id"], "processing")
+                background_tasks.add_task(
+                    ingestion.ingest_file,
+                    file_path=path,
+                    chatbot_id=chatbot_id,
+                    doc_id=doc["doc_id"],
+                    original_name=doc["filename"],
+                )
+                requeued += 1
+            else:
+                tenant_mgr.update_document_status(doc["doc_id"], "failed", error="File not found on disk")
+
+    return {"message": f"Knowledge base wiped. Re-ingesting {requeued} document(s).", "requeued": requeued}
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CHAT ENDPOINT
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -667,12 +740,13 @@ def _append_json_log(chatbot_id: str, session_id: str, message: str, response: s
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/embed-code/{chatbot_id}", tags=["Embed"])
-async def get_embed_code(chatbot_id: str):
+async def get_embed_code(chatbot_id: str, request: Request):
     """Return the HTML embed snippet for the given chatbot."""
     bot = tenant_mgr.get_chatbot(chatbot_id)
     if not bot:
         raise HTTPException(status_code=404, detail="Chatbot not found")
-    api_endpoint = CONFIG.get("api_endpoint", "http://localhost:8000")
+    # Derive endpoint from the actual request so it works correctly on any host
+    api_endpoint = str(request.base_url).rstrip("/")
     snippet = (
         f'<script src="{api_endpoint}/static/chatbot.js"\n'
         f'        data-chatbot-id="{chatbot_id}"\n'
@@ -769,6 +843,8 @@ async def get_chatbot_config(chatbot_id: str, request: Request):
         "welcome_message":   bot["welcome_message"],
         "color":             bot.get("color", "#2563eb"),
         "lead_form_enabled": bool(bot.get("lead_form_enabled", 0)),
+        "icon_type":         bot.get("icon_type", "default") or "default",
+        "icon_value":        bot.get("icon_value", "") or "",
     }
 
 

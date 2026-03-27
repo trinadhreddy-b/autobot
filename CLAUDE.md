@@ -68,6 +68,11 @@ Each chatbot gets its own ChromaDB collection named `chatbot_<chatbot_id>`. All 
 ### Document ingestion (async)
 Upload endpoints return immediately and run `ingestion.ingest_file` / `ingestion.ingest_url` as FastAPI `BackgroundTask`. Document status in SQLite progresses: `processing → ready | failed`. Chunks are 512 chars with 64-char overlap, split at sentence boundaries where possible.
 
+### Document deletion
+`vector_store.delete_by_doc_id` uses a two-step approach: `collection.get(where={"doc_id": ...})` to fetch IDs, then `collection.delete(ids=...)`. Direct `collection.delete(where=...)` was unreliable in some ChromaDB versions and silently left ghost vectors.
+
+If ghost vectors remain after a failed delete (symptom: re-uploaded document doesn't affect chat responses), use the **Rebuild Knowledge Base** button in the dashboard or call `POST /api/chatbots/{id}/rebuild-knowledge-base`. This wipes the entire ChromaDB collection and re-ingests all documents currently tracked in SQLite.
+
 ### Session memory
 `rag_pipeline.py` keeps an in-process `dict[session_id → deque]` of the last 3 Q/A turns, prepended to the context string for follow-up questions. This resets on server restart.
 
@@ -125,6 +130,10 @@ Tables: `clients`, `chatbots`, `documents`, `chat_logs`, `leads`
 - `frontend/dashboard/` — client dashboard, pure HTML/CSS/JS, no build step
 - `frontend/admin/` — admin panel (OTP login + client management)
 - `frontend/chatbot.js` — embeddable widget (single script tag)
+- `frontend/chatbot.css` — widget styles, loaded via `<link>` tag injected by chatbot.js
+
+### Widget textarea sizing
+The chat input textarea uses `height: 40px`, `padding: 8px`, `line-height: 1.5`, `overflow-y: hidden`. The `resizeInput()` function resets to `"40px"` (not `"auto"`) to avoid browser `rows` attribute interference. The input area (`#cb-input-area`) is hidden entirely while the lead capture form is displayed.
 
 Dashboard auto-detects API base URL from `window.location.origin`. Static asset URLs have `?v=<timestamp>` injected at runtime by FastAPI to bust browser cache after deployments.
 
@@ -132,7 +141,7 @@ Dashboard auto-detects API base URL from `window.location.origin`. Static asset 
 
 - **Passwords**: bcrypt. Old SHA-256 hashes auto-migrate to bcrypt on next login.
 - **Admin OTP**: 6-digit, 10-minute TTL, single-use, stored in memory dict.
-- **Lead capture form**: Per-chatbot opt-in (`lead_form_enabled`). Mandatory — no skip. One form per browser session (sessionStorage).
+- **Lead capture form**: Per-chatbot opt-in (`lead_form_enabled`). All fields mandatory (Name, Mobile, Email, Service Requirement) — no skip. One form per browser session (sessionStorage).
 - **Domain restriction**: Per-chatbot `allowed_domains`. Enforced on `/api/chat`, `/api/chatbot-config`, `/api/leads`. Empty = allow all.
 - **Rate limiting**: 30 req/60s per IP (global). 200 req/hour per chatbot.
 - **Chatbot IDs**: 16 hex chars to prevent enumeration.

@@ -83,11 +83,17 @@
     bubble.id        = "cb-bubble";
     bubble.className = "cb-bubble";
     bubble.setAttribute("aria-label", "Open chat");
-    bubble.style.backgroundColor = config.color;
+    const iconType  = config.icon_type  || "default";
+    const iconValue = config.icon_value || "";
+    bubble.style.backgroundColor = (iconType === "image" && iconValue) ? "transparent" : config.color;
+    let customIconHtml = "";
+    if (iconType === "image" && iconValue) {
+      customIconHtml = `<img class="cb-icon-custom cb-icon-img" src="${esc(iconValue)}" alt="chat icon" draggable="false"/>`;
+    } else {
+      customIconHtml = `<svg class="cb-icon-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+    }
     bubble.innerHTML = `
-      <svg class="cb-icon-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-      </svg>
+      ${customIconHtml}
       <svg class="cb-icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>`;
@@ -121,7 +127,7 @@
         <div class="cb-lead-body">
           <p class="cb-lead-title">Before we start, please share your details</p>
           <div id="cb-lead-error" class="cb-lead-error cb-hidden"></div>
-          <label class="cb-lead-label">Name (optional)
+          <label class="cb-lead-label">Name <span class="cb-req">*</span>
             <input type="text" id="cb-lead-name" class="cb-lead-input" placeholder="Your name" maxlength="100"/>
           </label>
           <label class="cb-lead-label">Mobile Number <span class="cb-req">*</span>
@@ -141,8 +147,8 @@
       <div id="cb-typing" class="cb-typing-indicator cb-hidden">
         <span></span><span></span><span></span>
       </div>
-      <div class="cb-input-area">
-        <textarea id="cb-input" class="cb-input" rows="1"
+      <div id="cb-input-area" class="cb-input-area">
+        <textarea id="cb-input" class="cb-input"
           placeholder="Type a message…" aria-label="Message input"
           maxlength="2000"></textarea>
         <button id="cb-send" class="cb-send-btn" style="background:${config.color}" aria-label="Send">
@@ -236,11 +242,11 @@
     const form   = document.getElementById("cb-lead-form");
     const msgs   = document.getElementById("cb-messages");
     const input  = document.getElementById("cb-input");
-    const sendBtn = document.getElementById("cb-send");
     if (form)    form.style.display = "none";
     if (msgs)    msgs.style.display = "";
-    if (input)   { input.disabled = false; }
-    if (sendBtn) sendBtn.disabled = false;
+    const inputArea = document.getElementById("cb-input-area");
+    if (inputArea) inputArea.style.display = "";
+    if (input)   { input.disabled = false; input.focus(); }
     addMessage(config.welcome_message, "bot");
   }
 
@@ -253,6 +259,9 @@
     const emailRx  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const mobileRx = /^\+?[\d\s\-()+]{7,20}$/;
 
+    if (!name) {
+      showLeadError("Please enter your name."); return;
+    }
     if (!mobile || !mobileRx.test(mobile)) {
       showLeadError("Please enter a valid mobile number."); return;
     }
@@ -342,7 +351,7 @@
   // ── Input auto-resize ─────────────────────────────────────────────────────────
 
   function resizeInput(el) {
-    el.style.height = "auto";
+    el.style.height = "40px";
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
   }
 
@@ -362,11 +371,10 @@
       bubble.querySelector(".cb-badge")?.remove();
 
       if (config.lead_form_enabled && !leadCaptured) {
-        // Show lead form, hide messages
+        // Show lead form, hide messages + input area
         document.getElementById("cb-lead-form").style.display = "";
         document.getElementById("cb-messages").style.display = "none";
-        document.getElementById("cb-input").disabled = true;
-        document.getElementById("cb-send").disabled = true;
+        document.getElementById("cb-input-area").style.display = "none";
         setTimeout(() => document.getElementById("cb-lead-name")?.focus(), 50);
       } else {
         document.getElementById("cb-input")?.focus();
@@ -400,6 +408,7 @@
     });
 
     input?.addEventListener("input", () => resizeInput(input));
+    if (input) resizeInput(input);
 
     // Close on outside click
     document.addEventListener("click", (e) => {

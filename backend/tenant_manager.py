@@ -143,6 +143,12 @@ class TenantManager:
                 conn.execute("ALTER TABLE clients ADD COLUMN must_change_password INTEGER DEFAULT 0")
             except Exception:
                 pass  # column already exists
+            # Migration: add icon columns to chatbots
+            for col, defn in [("icon_type", "TEXT DEFAULT 'default'"), ("icon_value", "TEXT DEFAULT ''")]:
+                try:
+                    conn.execute(f"ALTER TABLE chatbots ADD COLUMN {col} {defn}")
+                except Exception:
+                    pass  # column already exists
         logger.info("Database initialised at %s", self._db_path)
 
     @staticmethod
@@ -264,7 +270,7 @@ class TenantManager:
         return [dict(r) for r in rows]
 
     def update_chatbot(self, chatbot_id: str, fields: dict) -> None:
-        allowed = {"name", "welcome_message", "color", "allowed_domains", "lead_form_enabled"}
+        allowed = {"name", "welcome_message", "color", "allowed_domains", "lead_form_enabled", "icon_type", "icon_value"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return

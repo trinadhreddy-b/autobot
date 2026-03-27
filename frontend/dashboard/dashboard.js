@@ -381,6 +381,16 @@ async function deleteDoc(docId) {
   if (resp?.ok) { showToast("Document deleted"); loadDocuments(); }
 }
 
+async function rebuildKnowledgeBase() {
+  if (!confirm("This will wipe and re-index the entire knowledge base. Continue?")) return;
+  const resp = await apiFetch(`/api/chatbots/${currentBotId}/rebuild-knowledge-base`, { method: "POST" });
+  if (resp?.ok) {
+    const data = await resp.json();
+    showToast(data.message || "Rebuild started");
+    setTimeout(loadDocuments, 2000);
+  }
+}
+
 // â”€â”€ Embed code â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function loadEmbedCode() {
@@ -450,7 +460,51 @@ async function loadSettings() {
   val("setting-domains", (bot.allowed_domains || []).join("\n"));
   const leadToggle = document.getElementById("setting-lead-form");
   if (leadToggle) leadToggle.checked = !!bot.lead_form_enabled;
+  // Icon settings
+  const iconType = bot.icon_type || "default";
+  const radio = document.querySelector(`input[name="icon-type"][value="${iconType}"]`);
+  if (radio) { radio.checked = true; updateIconRows(iconType); }
+  if (iconType === "image" && bot.icon_value) { setIconPreview(bot.icon_value); }
 }
+
+function updateIconRows(type) {
+  document.getElementById("icon-image-row").style.display = type === "image" ? "flex" : "none";
+}
+
+function setIconPreview(url) {
+  const preview = document.getElementById("icon-preview");
+  if (!preview) return;
+  preview.src = url;
+  preview.style.display = "block";
+}
+
+async function uploadChatbotIcon(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById("icon-upload-status");
+  status.textContent = "Uploading…";
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const resp = await apiFetch(`/api/chatbots/${currentBotId}/icon`, { method: "POST", body: formData });
+    if (resp?.ok) {
+      const data = await resp.json();
+      setIconPreview(data.url + "?v=" + Date.now());
+      status.textContent = "Icon uploaded successfully.";
+    } else {
+      status.textContent = "Upload failed. Please try again.";
+    }
+  } catch (e) {
+    status.textContent = "Upload error: " + e.message;
+  }
+}
+
+// Wire up radio buttons once DOM is ready
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("input[name='icon-type']").forEach(r => {
+    r.addEventListener("change", () => updateIconRows(r.value));
+  });
+});
 
 async function saveSettings() {
   const name    = val("setting-name").trim();
@@ -458,9 +512,13 @@ async function saveSettings() {
   const color   = val("setting-color-hex").trim() || val("setting-color");
   const allowed_domains = val("setting-domains").split("\n").map(d => d.trim().toLowerCase()).filter(Boolean);
   const lead_form_enabled = document.getElementById("setting-lead-form")?.checked ? 1 : 0;
+  const icon_type  = document.querySelector("input[name='icon-type']:checked")?.value || "default";
+  const icon_value = icon_type === "image"
+    ? (document.getElementById("icon-preview")?.src?.split("?")[0]?.replace(location.origin, "") || "")
+    : "";
   const resp    = await apiFetch(`/api/chatbots/${currentBotId}`, {
     method: "PUT",
-    body:   JSON.stringify({ name, welcome_message: welcome, color, allowed_domains, lead_form_enabled }),
+    body:   JSON.stringify({ name, welcome_message: welcome, color, allowed_domains, lead_form_enabled, icon_type, icon_value }),
   });
   if (resp?.ok) { showToast("Settings saved!"); }
   else          { showToast("Failed to save settings."); }

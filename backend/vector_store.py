@@ -145,10 +145,16 @@ class VectorStoreManager:
         """Remove all vectors belonging to a specific document."""
         try:
             collection = self.get_or_create_collection(chatbot_id)
-            collection.delete(where={"doc_id": doc_id})
-            logger.info("Deleted vectors for doc %s from chatbot %s", doc_id, chatbot_id)
+            # Fetch IDs first, then delete by ID — more reliable than where-filter delete
+            results = collection.get(where={"doc_id": doc_id}, include=[])
+            ids_to_delete = results.get("ids", [])
+            if ids_to_delete:
+                collection.delete(ids=ids_to_delete)
+                logger.info("Deleted %d vectors for doc %s from chatbot %s", len(ids_to_delete), doc_id, chatbot_id)
+            else:
+                logger.warning("No vectors found for doc %s in chatbot %s", doc_id, chatbot_id)
         except Exception as e:
-            logger.warning("Could not delete vectors: %s", e)
+            logger.error("Could not delete vectors for doc %s: %s", e, doc_id)
 
     # ── Query operations ──────────────────────────────────────────────────────
 
